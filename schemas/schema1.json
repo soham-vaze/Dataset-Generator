@@ -1,0 +1,23 @@
+{
+  "database_type": "sqlite",
+  "tables": [
+    {
+      "table_name": "customers",
+      "columns": [
+        {"name": "customer_id", "type": "INTEGER", "primary_key": true},
+        {"name": "name", "type": "TEXT"},
+        {"name": "email", "type": "TEXT"},
+        {"name": "signup_date", "type": "TEXT"}
+      ]
+    },
+    {
+      "table_name": "orders",
+      "columns": [
+        {"name": "order_id", "type": "INTEGER", "primary_key": true},
+        {"name": "customer_id", "type": "INTEGER"},
+        {"name": "amount", "type": "REAL"},
+        {"name": "order_date", "type": "TEXT"}
+      ]
+    }
+  ]
+}
