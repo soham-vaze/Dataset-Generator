@@ -1,0 +1,94 @@
+import ollama
+import pandas as pd
+import os
+import json
+from datetime import datetime
+from typing import List, Dict
+
+
+# =====================================================
+# UTIL: SAVE DATASET
+# =====================================================
+
+def save_dataset(df: pd.DataFrame, output_path: str):
+    file_exists = os.path.exists(output_path)
+
+    df.to_csv(
+        output_path,
+        mode="a",
+        index=False,
+        header=not file_exists
+    )
+
+    jsonl_path = output_path.replace(".csv", ".jsonl")
+    df.to_json(jsonl_path, orient="records", lines=True, mode="a")
+
+
+# =====================================================
+# 1️⃣ CODE GENERATION
+# =====================================================
+
+def generate_code_dataset(
+    domain: str,
+    programming_language: str,
+    output_path: str,
+    model: str,
+    num_samples: int = 10,
+    temperature: float = 0.8
+):
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "pairs": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "instruction": {"type": "string"},
+                        "code": {"type": "string"}
+                    },
+                    "required": ["instruction", "code"]
+                }
+            }
+        }
+    }
+
+    prompt = (
+        f"Generate {num_samples} programming tasks related to {domain}.\n"
+        f"All solutions must be written in {programming_language}.\n"
+        "Ensure diversity in problem types.\n"
+        "Return JSON only."
+    )
+
+    response = ollama.chat(
+        model=model,
+        messages=[{"role": "system", "content": prompt}],
+        format=schema,
+        options={"temperature": temperature}
+    )
+
+    data = json.loads(response["message"]["content"])
+    df = pd.DataFrame(data["pairs"])
+
+    # Basic filtering
+    df = df[df["instruction"].str.len() > 15]
+    df = df[df["code"].str.len() > 30]
+
+    df["domain"] = domain
+    df["language"] = programming_language
+    df["created_at"] = datetime.utcnow().isoformat()
+
+    save_dataset(df, output_path)
+    print(f"✅ Saved {len(df)} code samples.")
+
+if __name__ == "__main__":
+
+    generate_code_dataset(
+        domain="Dynamic Programming",
+        programming_language="Python",
+        output_path="/home/soham/dataset_generator/datasets/text_code_dataset_v1.csv",
+        model="deepseek-coder:1.3b",
+        num_samples=10,
+        temperature=0.85
+    )

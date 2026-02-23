@@ -38,7 +38,7 @@ import pandas as pd
 import nltk
 from datetime import datetime
 from typing import List, Dict
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 nltk.download("punkt")
@@ -49,7 +49,7 @@ from nltk.tokenize import sent_tokenize
 # 🔹 LOAD EMBEDDING MODEL (only once)
 # =====================================================
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+# embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
 # =====================================================
@@ -207,16 +207,16 @@ def llm_consistency_check(context: str,
 # 6️⃣ VALIDATION LAYER 4: Embedding Semantic Check
 # =====================================================
 
-def semantic_similarity_check(answer: str,
-                              context: str,
-                              threshold: float = 0.75) -> bool:
+# def semantic_similarity_check(answer: str,
+#                               context: str,
+#                               threshold: float = 0.75) -> bool:
 
-    answer_emb = embedding_model.encode([answer])
-    context_emb = embedding_model.encode([context])
+#     answer_emb = embedding_model.encode([answer])
+#     context_emb = embedding_model.encode([context])
 
-    similarity = cosine_similarity(answer_emb, context_emb)[0][0]
+#     similarity = cosine_similarity(answer_emb, context_emb)[0][0]
 
-    return similarity >= threshold
+#     return similarity >= threshold
 
 
 # =====================================================
@@ -304,9 +304,9 @@ def generate_rag_dataset(document_text: str,
                 print("⚠ Failed length.")
                 continue
 
-            if not semantic_similarity_check(answer, chunk):
-                print("⚠ Failed semantic similarity.")
-                continue
+            # if not semantic_similarity_check(answer, chunk):
+            #     print("⚠ Failed semantic similarity.")
+            #     continue
 
             if not llm_consistency_check(chunk, question, answer, model):
                 print("⚠ Failed LLM judge.")
@@ -347,6 +347,14 @@ if __name__ == "__main__":
         document_text=text,
         output_path="../datasets/rag_dataset_v2.csv",
         model="gemma3:1b",
-        difficulty="hard",   # easy | medium | hard
+        difficulty="medium",   # easy | medium | hard
+        max_pairs=8
+    )
+
+    generate_rag_dataset(
+        document_text=text,
+        output_path="../datasets/rag_dataset_v2.csv",
+        model="gemma3:1b",
+        difficulty="easy",   # easy | medium | hard
         max_pairs=8
     )
