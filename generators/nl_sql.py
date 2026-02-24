@@ -211,6 +211,7 @@ def generate_nl2sql_dataset(schema_path: str,
                             model: str,
                             num_samples: int = 5):
 
+    print(f"Generating NL-SQL dataset.")
     schema = load_schema(schema_path)
     ddl_statements, column_map = json_to_sqlite_ddl(schema)
 

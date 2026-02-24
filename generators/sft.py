@@ -42,16 +42,17 @@ def call_model(model: str,
         f"about '{topic}' in {language}.\n"
         f"Use a {style} writing style.\n"
         f"Ensure diversity and avoid repetitive phrasing.\n"
+        f"Strictly follow the language rule.\n"
         f"Return ONLY valid JSON following the schema."
     )
-
+    print("Response sent to ollama model.")
     response = ollama.chat(
         model=model,
         messages=[{'role': 'system', 'content': system_msg}],
         format=dataset_schema,
         options={"temperature": temperature}
     )
-
+    print("Response recieved from ollama model")
     raw_data = json.loads(response['message']['content'])
     return raw_data.get("pairs", [])
 
@@ -63,7 +64,7 @@ def call_model(model: str,
 def validate_pairs(pairs: List[Dict],
                    min_instruction_len: int = 20,
                    min_response_len: int = 50) -> pd.DataFrame:
-
+    print("Validating the pairs.")
     df = pd.DataFrame(pairs)
 
     if df.empty:
@@ -85,7 +86,7 @@ def validate_pairs(pairs: List[Dict],
 
 def remove_duplicates(df: pd.DataFrame,
                       existing_instructions: set) -> pd.DataFrame:
-
+    print("Removing the duplicates")
     if df.empty:
         return df
 
@@ -122,6 +123,7 @@ def save_dataset(df: pd.DataFrame,
 def generate_instruction_dataset(topic: str,
                                  output_csv_path: str,
                                  models: List[str],
+                                 style: str,
                                  num_pairs: int = 5,
                                  language: str = "English",
                                  temperature: float = 0.8):
@@ -147,45 +149,43 @@ def generate_instruction_dataset(topic: str,
     total_added = 0
 
     for model in models:
-        for style in styles:   # Diversity enforcement (no randomness)
+        print(f"-> Model: {model} | Style: {style}")
 
-            print(f"-> Model: {model} | Style: {style}")
+        try:
+            pairs = call_model(
+                model=model,
+                topic=topic,
+                style=style,
+                language=language,
+                num_pairs=num_pairs,
+                temperature=random.random()
+            )
 
-            try:
-                pairs = call_model(
-                    model=model,
-                    topic=topic,
-                    style=style,
-                    language=language,
-                    num_pairs=num_pairs,
-                    temperature=random.random()
-                )
+            df = validate_pairs(pairs)
 
-                df = validate_pairs(pairs)
+            df = remove_duplicates(df, existing_instructions)
 
-                df = remove_duplicates(df, existing_instructions)
+            if df.empty:
+                print("⚠ No valid new pairs generated.")
+                continue
 
-                if df.empty:
-                    print("⚠ No valid new pairs generated.")
-                    continue
+            # Metadata
+            df["model"] = model
+            df["style"] = style
+            df["topic"] = topic
+            df["language"] = language
+            df["created_at"] = datetime.utcnow().isoformat()
 
-                # Metadata
-                df["model"] = model
-                df["style"] = style
-                df["topic"] = topic
-                df["language"] = language
-                df["created_at"] = datetime.utcnow().isoformat()
+            save_dataset(df, output_csv_path)
 
-                save_dataset(df, output_csv_path)
+            # Update in-memory set for efficiency
+            existing_instructions.update(df["instruction"].tolist())
 
-                # Update in-memory set for efficiency
-                existing_instructions.update(df["instruction"].tolist())
+            print(f"✅ Added {len(df)} rows.")
+            total_added += len(df)
 
-                print(f"✅ Added {len(df)} rows.")
-                total_added += len(df)
-
-            except Exception as e:
-                print(f"❌ Error with {model}: {e}")
+        except Exception as e:
+            print(f"❌ Error with {model}: {e}")
 
     print(f"\n🎯 Total new rows added: {total_added}")
 
@@ -200,6 +200,7 @@ if __name__ == "__main__":
         topic="Quantum Computing",
         output_csv_path="/home/soham/dataset_generator/datasets/instr_response_v1.csv",
         models=["gemma3:1b"],
+        style="conversational",
         num_pairs=10,
         language="English",
         temperature=0.85

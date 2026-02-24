@@ -14,12 +14,26 @@ from generators.rag import generate_rag_dataset
 from generators.classification import generate_classification_dataset
 from generators.code import generate_code_dataset
 from generators.multilingual import generate_multilingual_dataset
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pathlib import Path
+from fastapi import Query
+
 
 
 app = FastAPI(title="Dataset Generator API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 BASE_PATH = "/home/soham/dataset_generator/datasets"
+BASE_DATASET_DIR = "datasets"
+
 
 
 # =====================================================
@@ -44,6 +58,7 @@ def get_output_path(dataset_type: str, output_name: str):
 def sft_dataset(
     topic: str = Form(...),
     model: str = Form(...),
+    style: str = Form(...),
     num_pairs: int = Form(...),
     language: str = Form(...),
     temperature: float = Form(...),
@@ -56,6 +71,7 @@ def sft_dataset(
         topic=topic,
         output_csv_path=output_path,
         models=[model],
+        style=style,
         num_pairs=num_pairs,
         language=language,
         temperature=temperature
@@ -226,16 +242,67 @@ def multilingual_dataset(
 # =====================================================
 
 @app.get("/datasets")
-def list_datasets():
+def list_datasets(dataset_type: str = Query(...)):
+    folder = Path(BASE_DATASET_DIR) / dataset_type
 
-    dataset_files = []
+    if not folder.exists():
+        return {"datasets": []}
 
-    for root, dirs, files in os.walk(BASE_PATH):
-        for file in files:
-            if file.endswith(".csv"):
-                dataset_files.append(os.path.join(root, file))
+    csv_files = [f.name for f in folder.glob("*.csv")]
 
-    return {"datasets": dataset_files}
+    return {"datasets": csv_files}
+@app.get("/datasets/{dataset_type}")
+def list_datasets(dataset_type: str):
+    folder_path = Path(BASE_DATASET_DIR) / dataset_type
+
+    if not folder_path.exists():
+        return {"files": []}
+
+    files = [
+        f.name
+        for f in folder_path.iterdir()
+        if f.suffix == ".csv"
+    ]
+
+    return {"files": files}
+
+
+@app.get("/datasets/{dataset_type}/{filename}")
+def get_dataset(dataset_type: str, filename: str):
+    file_path = Path(BASE_DATASET_DIR) / dataset_type / filename
+
+    if not file_path.exists():
+        return {"error": "File not found"}
+
+    return FileResponse(
+        path=file_path,
+        media_type="text/csv",
+        filename=filename,
+    )
+
+@app.get("/datasets/{dataset_type}/{filename}")
+def get_dataset(dataset_type: str, filename: str):
+    file_path = Path(BASE_DATASET_DIR) / dataset_type / filename
+
+    if not file_path.exists():
+        return JSONResponse(content={"error": "File not found"}, status_code=404)
+
+    return FileResponse(
+        path=file_path,
+        media_type="text/csv",
+        filename=filename,
+    )
+
+@app.delete("/datasets/{dataset_type}/{filename}")
+def delete_dataset(dataset_type: str, filename: str):
+    file_path = Path(BASE_DATASET_DIR) / dataset_type / filename
+
+    if not file_path.exists():
+        return JSONResponse(content={"error": "File not found"}, status_code=404)
+
+    os.remove(file_path)
+
+    return {"message": "Dataset deleted successfully"}
 
 
 # =====================================================
