@@ -1,0 +1,192 @@
+[
+  {
+    "epic": "Auction & Bidding Engine",
+    "feature": "Real-time Proxy Bidding",
+    "stories": [
+      "Incremental Automatic Bid Logic",
+      "Outbid Notification Trigger",
+      "Reserve Price Not Met Notification",
+      "Last-Second Bid (Sniping) Buffer Check"
+    ]
+  },
+  {
+    "epic": "Auction & Bidding Engine",
+    "feature": "Best Offer Negotiation",
+    "stories": [
+      "Automated Counter-Offer Thresholds",
+      "Offer Expiry Logic (48 Hours)",
+      "Multi-Quantity Best Offer Validation"
+    ]
+  },
+  {
+    "epic": "Seller Listing & Inventory",
+    "feature": "Draft Management System",
+    "stories": [
+      "Bulk Listing Template Application",
+      "Scheduled Listing Start-Time Logic",
+      "AI-Based Category Suggestion Engine",
+      "Auto-Relist for Unsold Items"
+    ]
+  },
+  {
+    "epic": "Seller Listing & Inventory",
+    "feature": "Vehicle & Parts Compatibility",
+    "stories": [
+      "My Garage Vehicle Fitment Filter",
+      "VIN Decoder for Auto Listings",
+      "Parts Compatibility Table Verification"
+    ]
+  },
+  {
+    "epic": "Buyer Experience & Personalization",
+    "feature": "Saved Search & Feed Alerts",
+    "stories": [
+      "Instant Push Notification for New Matches",
+      "Search Result Personalization Ranking",
+      "Seller Newsletter Subscription Opt-in",
+      "Daily Deals Targeted Carousel"
+    ]
+  },
+  {
+    "epic": "Buyer Experience & Personalization",
+    "feature": "Watchlist & Cart Management",
+    "stories": [
+      "Watchlist Price Drop Alert",
+      "Combined Shipping Calculation in Cart",
+      "Seller-Initiated Discount for Watchers"
+    ]
+  },
+  {
+    "epic": "Payments & Managed Funds",
+    "feature": "Seller Payout Optimization",
+    "stories": [
+      "Direct Bank Payout Scheduling",
+      "Final Value Fee Automated Deduction",
+      "Pending Funds Hold for New Sellers",
+      "Tax Document (1099-K) Generation"
+    ]
+  },
+  {
+    "epic": "Payments & Managed Funds",
+    "feature": "Multi-Payment Method Support",
+    "stories": [
+      "PayPal and Apple Pay Integration",
+      "eBay Gift Card Balance Application",
+      "Split Payment for High-Value Items"
+    ]
+  },
+  {
+    "epic": "Trust, Safety & Resolution",
+    "feature": "eBay Money Back Guarantee",
+    "stories": [
+      "Item Not Received Claim Workflow",
+      "Return Label Generation (Seller-Paid)",
+      "Escalation to eBay Customer Secret",
+      "Evidence Upload for 'Item Not As Described'"
+    ]
+  },
+  {
+    "epic": "Trust, Safety & Resolution",
+    "feature": "Seller Performance Metrics",
+    "stories": [
+      "Defect Rate Warning System",
+      "Top-Rated Seller Badge Validation",
+      "Account Suspension Appeal Workflow"
+    ]
+  },
+  {
+    "epic": "Global Shipping Program (GSP)",
+    "feature": "International Customs & Duty",
+    "stories": [
+      "Automated Import Fee Calculation",
+      "Global Hub Routing Instruction",
+      "Restricted Item International Filter",
+      "Carrier Tracking Milestone Translation"
+    ]
+  },
+  {
+    "epic": "Global Shipping Program (GSP)",
+    "feature": "Domestic Warehouse Handover",
+    "stories": [
+      "GSP Reference Number Generation",
+      "Domestic-to-International Label Swap",
+      "Warehouse Weight and Dim Verification"
+    ]
+  },
+  {
+    "epic": "Feedback & Reputation System",
+    "feature": "Detailed Seller Ratings (DSR)",
+    "stories": [
+      "Five-Star Criteria Aggregation",
+      "Review Revisions Request Workflow",
+      "Buyer Feedback Removal Policy Logic",
+      "Automated Positive Feedback Reminder"
+    ]
+  },
+  {
+    "epic": "Feedback & Reputation System",
+    "feature": "Seller Response Management",
+    "stories": [
+      "Public Reply to Negative Feedback",
+      "Feedback Star Color Progression",
+      "Historical Feedback Archive Access"
+    ]
+  },
+  {
+    "epic": "Marketing & Promotions",
+    "feature": "eBay Ad Commerce (Promoted Listings)",
+    "stories": [
+      "Ad Rate Suggestion based on Trends",
+      "Campaign Click-Through Analytics",
+      "Sponsored Item Ranking Placement",
+      "Marketing Dashboard Spend Control"
+    ]
+  },
+  {
+    "epic": "Marketing & Promotions",
+    "feature": "Markdown Manager",
+    "stories": [
+      "Store-wide Percentage Discount Sale",
+      "Buy-One-Get-One (BOGO) Pricing",
+      "Holiday Sale Timer Component"
+    ]
+  },
+  {
+    "epic": "Authenticated Luxury & Collectibles",
+    "feature": "Authentication Hub Workflow",
+    "stories": [
+      "Expert Verifier Condition Scoring",
+      "Authenticator NFC Tag Encoding",
+      "Rejection and Return to Seller Logic",
+      "Verified Badge Search Presence"
+    ]
+  },
+  {
+    "epic": "Authenticated Luxury & Collectibles",
+    "feature": "High-Value Escrow",
+    "stories": [
+      "Crypto-Payment Verification (Whitelisted)",
+      "Escrow Fund Release on Handover",
+      "Certified Appraiser Appointment Booking"
+    ]
+  },
+  {
+    "epic": "Messaging & Notification Hub",
+    "feature": "Seller-Buyer Messaging Portal",
+    "stories": [
+      "Spam and Phishing Link Detection",
+      "Message Read Receipt Confirmation",
+      "Automated Out-of-Office Vacation Mode",
+      "Attachment Preview (JPG/PDF)"
+    ]
+  },
+  {
+    "epic": "Messaging & Notification Hub",
+    "feature": "Push & Email Preference Center",
+    "stories": [
+      "Granular Alert Frequency Controls",
+      "Silent Night-Mode Notification Logic",
+      "SMS Order Status Opt-in/Out"
+    ]
+  }
+]

@@ -1,207 +1,295 @@
-import ollama
+import requests
 import pandas as pd
 import os
 import json
+import re
+import math
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Set
 import random
 
 
 # ===============================
-# 1️⃣ MODEL CALL
+# CONFIG
 # ===============================
 
-def call_model(model: str,
-               topic: str,
-               style: str,
-               language: str,
-               num_pairs: int,
-               temperature: float) -> List[Dict]:
+SLM_API = "http://10.30.1.34:11434/api/generate"
 
-    dataset_schema = {
-        "type": "object",
-        "properties": {
-            "pairs": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "instruction": {"type": "string"},
-                        "response": {"type": "string"}
-                    },
-                    "required": ["instruction", "response"]
-                }
-            }
-        },
-        "required": ["pairs"]
+
+# ===============================
+# MODEL CALL
+# ===============================
+
+def call_remote_slm(prompt: str,
+                    model: str,
+                    temperature: float = 0.7) -> str:
+
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": temperature,
+            "num_predict": 2000
+        }
     }
 
-    system_msg = (
-        f"You are an expert synthetic dataset generator.\n"
-        f"Generate {num_pairs} high-quality instruction-response pairs "
-        f"about '{topic}' in {language}.\n"
-        f"Use a {style} writing style.\n"
-        f"Ensure diversity and avoid repetitive phrasing.\n"
-        f"Strictly follow the language rule.\n"
-        f"Return ONLY valid JSON following the schema."
+    response = requests.post(
+        SLM_API,
+        json=payload,
+        headers={"Content-Type": "application/json"},
+        timeout=180
     )
-    print("Response sent to ollama model.")
-    response = ollama.chat(
-        model=model,
-        messages=[{'role': 'system', 'content': system_msg}],
-        format=dataset_schema,
-        options={"temperature": temperature}
-    )
-    print("Response recieved from ollama model")
-    raw_data = json.loads(response['message']['content'])
-    return raw_data.get("pairs", [])
+
+    # response.raise_for_status()
+
+    # return response.json()["response"]
+
+    if response.status_code != 200:
+        raise Exception(f"HTTP {response.status_code}: {response.text}")
+
+    data = response.json()
+
+    if "response" not in data:
+        raise Exception(f"Invalid response format: {data}")
+
+    return data["response"]
+
+# ===============================
+# JSON EXTRACTION (ROBUST)
+# ===============================
+
+def extract_json(text: str) -> Dict:
+
+    text = re.sub(r"```json|```", "", text).strip()
+
+    # Try direct parsing
+    try:
+        return json.loads(text)
+    except:
+        pass
+
+    # Extract largest JSON block
+    matches = re.findall(r"\{[\s\S]*\}", text)
+
+    for match in reversed(matches):
+        try:
+            return json.loads(match)
+        except:
+            continue
+
+    raise ValueError(f"JSON parsing failed:\n{text[:500]}")
 
 
 # ===============================
-# 2️⃣ VALIDATION
+# NORMALIZATION (DEDUP)
 # ===============================
 
-def validate_pairs(pairs: List[Dict],
-                   min_instruction_len: int = 20,
-                   min_response_len: int = 50) -> pd.DataFrame:
-    print("Validating the pairs.")
-    df = pd.DataFrame(pairs)
-
-    if df.empty:
-        return df
-
-    df = df[
-        (df["instruction"].str.len() >= min_instruction_len) &
-        (df["response"].str.len() >= min_response_len)
-    ]
-
-    df = df.dropna(subset=["instruction", "response"])
-
-    return df
+def normalize_text(text: str) -> str:
+    return " ".join(text.lower().split())
 
 
 # ===============================
-# 3️⃣ DEDUPLICATION (OPTIMIZED)
+# QUALITY FILTER
 # ===============================
 
-def remove_duplicates(df: pd.DataFrame,
-                      existing_instructions: set) -> pd.DataFrame:
-    print("Removing the duplicates")
-    if df.empty:
-        return df
+def quality_filter(instruction: str, response: str) -> bool:
 
-    df = df[~df["instruction"].isin(existing_instructions)]
+    if len(instruction) < 20:
+        return False
 
-    return df
+    if len(response) < 50:
+        return False
+
+    if "lorem ipsum" in instruction.lower():
+        return False
+
+    return True
 
 
 # ===============================
-# 4️⃣ SAVE DATASET
+# SAVE DATASET
 # ===============================
 
-def save_dataset(df: pd.DataFrame,
-                 output_csv_path: str):
+def save_dataset(rows: List[Dict], output_path: str):
 
-    file_exists = os.path.isfile(output_csv_path)
+    df = pd.DataFrame(rows)
+
+    file_exists = os.path.isfile(output_path)
 
     df.to_csv(
-        output_csv_path,
+        output_path,
         mode='a',
         index=False,
         header=not file_exists
     )
 
-    # JSONL export
-    jsonl_path = output_csv_path.replace(".csv", ".jsonl")
-    df.to_json(jsonl_path, orient="records", lines=True, mode='a')
+    jsonl_path = output_path.replace(".csv", ".jsonl")
+
+    df.to_json(
+        jsonl_path,
+        orient="records",
+        lines=True,
+        mode='a'
+    )
 
 
 # ===============================
-# 5️⃣ MAIN GENERATION ENGINE
+# MAIN GENERATOR
 # ===============================
 
-def generate_instruction_dataset(topic: str,
-                                 output_csv_path: str,
-                                 models: List[str],
-                                 style: str,
-                                 num_pairs: int = 5,
-                                 language: str = "English",
-                                 temperature: float = 0.8):
-
-    styles = [
-        "highly technical",
-        "beginner-friendly",
-        "problem-solving oriented",
-        "conversational"
-    ]
+def generate_instruction_dataset(
+    topic: str,
+    output_csv_path: str,
+    models: List[str],
+    style: str,
+    num_samples: int = 50,
+    batch_size: int = 5,
+    language: str = "English",
+    temperature: float = 0.8
+):
 
     print(f"\n🚀 Generating dataset for topic: {topic}")
     print(f"Language: {language}")
-    print(f"Temperature: {temperature}\n")
+    print(f"Batch size: {batch_size}\n")
 
-    # Load existing instructions once (efficient deduplication)
-    existing_instructions = set()
+    existing_instructions: Set[str] = set()
 
+    # Load existing dataset for deduplication
     if os.path.exists(output_csv_path):
         existing_df = pd.read_csv(output_csv_path)
-        existing_instructions = set(existing_df["instruction"].tolist())
+        if "instruction" in existing_df.columns:
+            existing_instructions = set(
+                existing_df["instruction"].astype(str).apply(normalize_text)
+            )
 
     total_added = 0
 
     for model in models:
-        print(f"-> Model: {model} | Style: {style}")
 
-        try:
-            pairs = call_model(
-                model=model,
-                topic=topic,
-                style=style,
-                language=language,
-                num_pairs=num_pairs,
-                temperature=random.random()
-            )
+        print(f"\n🤖 Model: {model}")
 
-            df = validate_pairs(pairs)
+        dataset_rows = []
 
-            df = remove_duplicates(df, existing_instructions)
+        attempts = 0
+        max_attempts = num_samples * 5
 
-            if df.empty:
-                print("⚠ No valid new pairs generated.")
+        while len(dataset_rows) < num_samples and attempts < max_attempts:
+
+            attempts += 1
+
+            remaining = num_samples - len(dataset_rows)
+            current_batch = min(batch_size, remaining)
+
+            print(f"\n🔄 Attempt {attempts} → generating {current_batch}")
+
+            prompt = f"""
+You are a strict JSON generator.
+
+Generate EXACTLY {current_batch} instruction-response pairs.
+
+Topic: {topic}
+Language: {language}
+Style: {style}
+
+Rules:
+- Output ONLY valid JSON
+- No explanations
+- No markdown
+- No ```json
+- Ensure valid syntax
+
+Format:
+{{
+  "pairs": [
+    {{
+      "instruction": "string",
+      "response": "string"
+    }}
+  ]
+}}
+"""
+
+            try:
+                response_text = call_remote_slm(
+                    prompt=prompt,
+                    model=model,
+                    temperature=random.uniform(0.6, 0.9)
+                )
+
+                data = extract_json(response_text)
+
+            except Exception as e:
+                print("\n❌ JSON PARSE FAILED")
+                print("----- RAW RESPONSE START -----")
+                # print(response_text[:1000])
+                print("----- RAW RESPONSE END -----\n")
                 continue
 
-            # Metadata
-            df["model"] = model
-            df["style"] = style
-            df["topic"] = topic
-            df["language"] = language
-            df["created_at"] = datetime.utcnow().isoformat()
+            valid_count = 0
 
-            save_dataset(df, output_csv_path)
+            for item in data.get("pairs", []):
 
-            # Update in-memory set for efficiency
-            existing_instructions.update(df["instruction"].tolist())
+                instruction = item.get("instruction", "").strip()
+                response = item.get("response", "").strip()
 
-            print(f"✅ Added {len(df)} rows.")
-            total_added += len(df)
+                norm_inst = normalize_text(instruction)
 
-        except Exception as e:
-            print(f"❌ Error with {model}: {e}")
+                # Dedup
+                if norm_inst in existing_instructions:
+                    print("⚠ Duplicate skipped")
+                    continue
 
-    print(f"\n🎯 Total new rows added: {total_added}")
+                # Quality filter
+                if not quality_filter(instruction, response):
+                    print("⚠ Low quality skipped")
+                    continue
+
+                dataset_rows.append({
+                    "instruction": instruction,
+                    "response": response,
+                    "model": model,
+                    "style": style,
+                    "topic": topic,
+                    "language": language,
+                    "created_at": datetime.utcnow().isoformat()
+                })
+
+                existing_instructions.add(norm_inst)
+                valid_count += 1
+
+                print(f"✅ Accepted ({len(dataset_rows)}/{num_samples})")
+
+                if len(dataset_rows) >= num_samples:
+                    break
+
+            if valid_count == 0:
+                print("⚠ Entire batch rejected")
+
+        # SAVE per model
+        if dataset_rows:
+            save_dataset(dataset_rows, output_csv_path)
+            print(f"\n🎯 Saved {len(dataset_rows)} samples for {model}")
+            total_added += len(dataset_rows)
+        else:
+            print(f"\n❌ No valid samples for {model}")
+
+    print(f"\n🚀 TOTAL samples added: {total_added}")
 
 
 # ===============================
-# 🔥 EXAMPLE USAGE
+# RUN
 # ===============================
 
 if __name__ == "__main__":
 
     generate_instruction_dataset(
         topic="Quantum Computing",
-        output_csv_path="/home/soham/dataset_generator/datasets/instr_response_v1.csv",
+        output_csv_path="/home/soham/dataset_generator/datasets/instr_response_v2.csv",
         models=["gemma3:1b"],
         style="conversational",
-        num_pairs=10,
+        num_samples=50,
+        batch_size=5,
         language="English",
         temperature=0.85
     )
