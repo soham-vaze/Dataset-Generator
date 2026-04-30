@@ -1,46 +1,29 @@
-import requests
-import json
-import re
-import os
 import argparse
-from typing import List, Dict
+import json
+import logging
+import os
+import re
+from typing import Dict, List, Set
+
+from generators.utils import ModelNotFoundError, call_model, extract_json
+
+logger = logging.getLogger(__name__)
 
 # ===============================
 # CONFIG
 # ===============================
-SLM_API = "http://10.30.1.34:11434/api/generate"
-OUTPUT_JSONL = "/home/soham/dataset_generator/datasets/qa_finetuning_v2.jsonl"
+DEFAULT_OUTPUT_JSONL = "datasets/qa_finetuning.jsonl"
 
-def call_remote_slm(prompt: str, model: str) -> str:
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.8, "num_predict": 3000}
-    }
-    response = requests.post(SLM_API, json=payload, timeout=300)
-    return response.json()["response"]
-
-def extract_json(text: str) -> Dict:
-    text = re.sub(r"```json|```", "", text).strip()
-    matches = re.findall(r"\{[\s\S]*\}", text)
-    for match in reversed(matches):
-        try:
-            return json.loads(match)
-        except:
-            continue
-    raise ValueError("JSON parsing failed")
-
-def validate_batch(results: List[Dict]) -> bool:
+def validate_batch(results: List[Dict[str, object]]) -> bool:
     """
     Validation 1: All 4 ACs must be distinct.
     Validation 2: Each AC must have positive, negative, and edge test cases.
     """
     if len(results) != 4:
-        print(f"⚠️ Incorrect count: Expected 4 ACs, got {len(results)}.")
+        logger.warning("Incorrect count: Expected 4 ACs, got %d.", len(results))
         return False
 
-    seen_acs = set()
+    seen_acs: Set[str] = set()
     required_keys = {"positive", "negative", "edge"}
 
     for item in results:
@@ -48,7 +31,7 @@ def validate_batch(results: List[Dict]) -> bool:
         raw_ac = item.get("acceptance_criteria", "")
         clean_ac = " ".join(re.sub(r'[^a-zA-Z0-9\s]', '', raw_ac).lower().split())
         if clean_ac in seen_acs:
-            print(f"⚠️ Duplicate AC detected: '{clean_ac[:30]}...'")
+            logger.warning("Duplicate AC detected: '%s...'", clean_ac[:30])
             return False
         seen_acs.add(clean_ac)
 
@@ -56,21 +39,28 @@ def validate_batch(results: List[Dict]) -> bool:
         test_cases = item.get("test_cases", {})
         if not all(k in test_cases for k in required_keys):
             missing = required_keys - test_cases.keys()
-            print(f"⚠️ Missing test case types: {missing}")
+            logger.warning("Missing test case types: %s", missing)
             return False
             
     return True
 
-def generate_qa_dataset(epic, feature, story, model, num_batches):
-    print(f"🚀 Generating Gherkin-style QA Cases for Story: {story}")
+def generate_qa_dataset(
+    epic: str,
+    feature: str,
+    story: str,
+    model: str,
+    num_batches: int,
+    output_path: str = DEFAULT_OUTPUT_JSONL,
+) -> None:
+    logger.info("Generating Gherkin-style QA Cases for Story: %s", story)
     system_content = "You are an expert QA assistant. For every Acceptance Criterion provided, you must generate atleast one Positive, one Negative, and one Edge test case in a structured JSON format."
 
     for b in range(num_batches):
-        max_retries = 5 # Increased retries for stricter validation
+        max_retries = 5
         success = False
         
         for attempt in range(max_retries):
-            print(f"🔄 Attempt {attempt+1}/{max_retries}...")
+            logger.info("Attempt %d/%d...", attempt + 1, max_retries)
             
             prompt = f"""
 You are a strict JSON generator. Generate exactly 4 UNIQUE Acceptance Criteria in Gherkin format.
@@ -92,12 +82,13 @@ OUTPUT FORMAT:
 }}
 """
             try:
-                raw_response = call_remote_slm(prompt, model)
+                raw_response = call_model(prompt, model, temperature=0.8, num_predict=3000, timeout=300)
                 data = extract_json(raw_response)
                 results = data.get("results", [])
 
                 if validate_batch(results):
-                    with open(OUTPUT_JSONL, "a") as f:
+                    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                    with open(output_path, "a", encoding="utf-8") as f:
                         for item in results:
                             entry = {
                                 "messages": [
@@ -107,14 +98,16 @@ OUTPUT FORMAT:
                                 ]
                             }
                             f.write(json.dumps(entry) + "\n")
-                    print(f"✅ Successfully appended 4 validated ACs.")
+                    logger.info("Successfully appended 4 validated ACs.")
                     success = True
                     break
+            except ModelNotFoundError:
+                raise
             except Exception as e:
-                print(f"❌ Error: {e}")
+                logger.error("Error: %s", e)
 
         if not success:
-            exit(1) # Signal failure to the orchestrator
+            raise RuntimeError(f"Failed to generate valid data for story '{story}' after {max_retries} retries")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -123,6 +116,8 @@ if __name__ == "__main__":
     parser.add_argument("--story", required=True)
     parser.add_argument("--model", default="llama3.1:8b")
     parser.add_argument("--batches", type=int, default=1)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT_JSONL)
     args = parser.parse_args()
 
-    generate_qa_dataset(args.epic, args.feature, args.story, args.model, args.batches)
+    logging.basicConfig(level=logging.INFO)
+    generate_qa_dataset(args.epic, args.feature, args.story, args.model, args.batches, args.output)

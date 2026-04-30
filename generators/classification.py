@@ -1,89 +1,14 @@
-import pandas as pd
-import os
-from typing import List
-import json
-from datetime import datetime
-import requests
+import logging
 import math
-import re
+import os
+from datetime import datetime, timezone
+from typing import List
 
-OLLAMA_URL = "http://10.30.1.34:11434/api/generate"
+import pandas as pd
 
+from generators.utils import ModelNotFoundError, call_model, extract_json, save_dataframe
 
-# =====================================================
-# UTIL: SAVE DATASET
-# =====================================================
-
-def save_dataset(df: pd.DataFrame, output_path: str):
-
-    file_exists = os.path.exists(output_path)
-
-    df.to_csv(
-        output_path,
-        mode="a",
-        index=False,
-        header=not file_exists
-    )
-
-    jsonl_path = output_path.replace(".csv", ".jsonl")
-
-    df.to_json(
-        jsonl_path,
-        orient="records",
-        lines=True,
-        mode="a"
-    )
-
-
-# =====================================================
-# UTIL: EXTRACT JSON FROM MODEL OUTPUT
-# =====================================================
-
-def extract_json(text: str):
-
-    text = text.strip()
-
-    # Remove markdown blocks
-    text = text.replace("```json", "").replace("```", "")
-
-    # Extract JSON object
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-
-    if not match:
-        raise ValueError("No JSON object found in model output")
-
-    json_text = match.group(0)
-
-    return json.loads(json_text)
-
-
-# =====================================================
-# UTIL: CALL OLLAMA API
-# =====================================================
-
-def query_model(prompt: str, model: str, temperature: float):
-
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": temperature
-        }
-    }
-
-    response = requests.post(
-        OLLAMA_URL,
-        headers={"Content-Type": "application/json"},
-        json=payload,
-        timeout=120
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    return data["response"]
+logger = logging.getLogger(__name__)
 
 
 # =====================================================
@@ -97,17 +22,17 @@ def generate_classification_dataset(
     model: str,
     num_samples: int = 100,
     temperature: float = 0.8
-):
+) -> None:
 
     labels_str = ", ".join(class_labels)
 
-    print(f"Generating classification dataset for: {task_description}")
+    logger.info("Generating classification dataset for: %s", task_description)
 
     batch_size = min(20, num_samples)
 
     total_batches = math.ceil(num_samples / batch_size)
 
-    print(f"Using batch size {batch_size} ({total_batches} batches)")
+    logger.info("Using batch size %d (%d batches)", batch_size, total_batches)
 
     generated_total = 0
 
@@ -115,7 +40,7 @@ def generate_classification_dataset(
 
         current_batch = min(batch_size, num_samples - generated_total)
 
-        print(f"\nBatch {batch+1}/{total_batches} → generating {current_batch}")
+        logger.info("Batch %d/%d — generating %d", batch + 1, total_batches, current_batch)
 
         prompt = f"""
 Generate {current_batch} examples for a text classification dataset.
@@ -137,40 +62,41 @@ Return ONLY valid JSON in the format:
 Ensure balanced labels.
 """
 
+        raw_output = ""
         try:
 
-            raw_output = query_model(prompt, model, temperature)
+            raw_output = call_model(prompt, model, temperature=temperature, timeout=120)
 
-            # Debug print (helps diagnose bad responses)
-            print("\n--- RAW MODEL OUTPUT ---")
-            print(raw_output[:500])
-            print("------------------------\n")
+            logger.debug("Raw model output: %s", raw_output[:500])
 
             data = extract_json(raw_output)
 
             df = pd.DataFrame(data["samples"])
 
+        except ModelNotFoundError:
+            raise
         except Exception as e:
 
-            print("⚠️ Failed to parse model output:", e)
-            print("Model output was:\n", raw_output)
+            logger.warning("Failed to parse model output: %s", e)
+            if raw_output:
+                logger.debug("Model output was: %s", raw_output[:500])
             continue
 
         df = df[df["label"].isin(class_labels)]
 
         df["task"] = task_description
-        df["created_at"] = datetime.utcnow().isoformat()
+        df["created_at"] = datetime.now(timezone.utc).isoformat()
 
-        save_dataset(df, output_path)
+        save_dataframe(df, output_path)
 
         generated_total += len(df)
 
-        print(f"Saved {len(df)} samples. Total so far: {generated_total}")
+        logger.info("Saved %d samples. Total so far: %d", len(df), generated_total)
 
         if generated_total >= num_samples:
             break
 
-    print(f"\n✅ Dataset generation completed. Total samples saved: {generated_total}")
+    logger.info("Dataset generation completed. Total samples saved: %d", generated_total)
 
 
 # =====================================================

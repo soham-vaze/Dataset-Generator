@@ -83,7 +83,15 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
       headers: { Authorization: `Bearer ${token}` },
       body: form,
     })
-      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(async (res) => {
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          data = { detail: `Server returned ${res.status} with no body` };
+        }
+        return { ok: res.ok, data };
+      })
       .then(({ ok, data }) => {
         if (ok) {
           resolveJob(jobId, true);

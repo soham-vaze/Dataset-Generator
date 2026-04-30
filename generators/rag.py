@@ -1,57 +1,30 @@
+import json
+import logging
 import os
 import re
-import json
-import requests
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Set
+
+import nltk
 import ollama
 import pandas as pd
-import nltk
-from datetime import datetime
-from typing import List, Dict
 from sklearn.metrics.pairwise import cosine_similarity
 
-nltk.download("punkt")
+from generators.utils import call_model, extract_json_array, save_dataset
+
+try:
+    nltk.data.find("tokenizers/punkt")
+except LookupError:
+    nltk.download("punkt", quiet=True)
+
+try:
+    nltk.data.find("tokenizers/punkt_tab")
+except LookupError:
+    nltk.download("punkt_tab", quiet=True)
+
 from nltk.tokenize import sent_tokenize
 
-
-# =====================================================
-# REMOTE SLM CONFIG
-# =====================================================
-
-SLM_API = "http://10.30.1.34:11434/api/generate"
-
-
-def call_remote_slm(prompt: str,
-                    model: str,
-                    temperature: float = 0.7) -> str:
-
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": temperature
-        }
-    }
-
-    response = requests.post(
-        SLM_API,
-        json=payload,
-        headers={"Content-Type": "application/json"}
-    )
-
-    # response.raise_for_status()
-
-    # return response.json()["response"]
-
-    if response.status_code != 200:
-        raise Exception(f"HTTP {response.status_code}: {response.text}")
-
-    data = response.json()
-
-    if "response" not in data:
-        raise Exception(f"Invalid response format: {data}")
-
-    return data["response"]
+logger = logging.getLogger(__name__)
 
 # =====================================================
 # 1️⃣ CHUNKING
@@ -61,7 +34,7 @@ def chunk_text(text: str,
                sentences_per_chunk: int = 6,
                overlap: int = 2) -> List[str]:
 
-    print("Chunking text")
+    logger.info("Chunking text")
 
     sentences = sent_tokenize(text)
 
@@ -89,7 +62,7 @@ def chunk_text(text: str,
 
 def build_prompt_by_difficulty(difficulty: str) -> str:
 
-    print(f"Building prompt for {difficulty} level")
+    logger.info("Building prompt for %s level", difficulty)
 
     if difficulty == "easy":
         return (
@@ -115,33 +88,15 @@ def build_prompt_by_difficulty(difficulty: str) -> str:
 
 
 # =====================================================
-# 3️⃣ BATCH QA GENERATION
+# 3️⃣ BATCH QA GENERATION — uses extract_json_array from generators.utils
 # =====================================================
-
-def extract_json_array(text: str):
-
-    text = re.sub(r"```json|```", "", text).strip()
-
-    # Try direct parse
-    try:
-        return json.loads(text)
-    except:
-        pass
-
-    # Extract JSON array
-    match = re.search(r"\[\s*\{.*\}\s*\]", text, re.DOTALL)
-
-    if match:
-        return json.loads(match.group())
-
-    raise ValueError(f"JSON extraction failed:\n{text[:500]}")
 
 def generate_qa_batch(contexts: List[str],
                       model: str,
                       difficulty: str,
-                      temperature: float = 0.7) -> List[Dict]:
+                      temperature: float = 0.7) -> List[Dict[str, Any]]:
 
-    print("Generating QA batch")
+    logger.info("Generating QA batch")
 
     instruction = build_prompt_by_difficulty(difficulty)
 
@@ -171,23 +126,21 @@ Format:
 {joined_context}
 """
 
-    raw_output = call_remote_slm(
+    raw_output = call_model(
         prompt=prompt,
         model=model,
-        temperature=temperature
+        temperature=temperature,
     )
 
     if not raw_output or raw_output.strip() == "":
         raise ValueError("Empty response from model")
 
-    print("\n----- RAW OUTPUT START -----")
-    print(raw_output[:1000])
-    print("----- RAW OUTPUT END -----\n")
+    logger.debug("Raw LLM output: %s", raw_output[:500])
 
     raw_output = raw_output.strip()
     try:
         qa_list = extract_json_array(raw_output)
-    except:
+    except (json.JSONDecodeError, ValueError):
         raw_output = re.sub(r"```json|```", "", raw_output)
         qa_list = json.loads(raw_output)
 
@@ -202,7 +155,7 @@ def grounding_overlap_check(answer: str,
                             context: str,
                             threshold: float = 0.3) -> bool:
 
-    print("Entering validation layer 1 overlap")
+    logger.debug("Entering validation layer 1 overlap")
 
     answer_words = set(re.findall(r"\w+", answer.lower()))
     context_words = set(re.findall(r"\w+", context.lower()))
@@ -212,7 +165,7 @@ def grounding_overlap_check(answer: str,
 
     overlap_ratio = len(answer_words & context_words) / len(answer_words)
 
-    print(f"Overlap ratio: {overlap_ratio}")
+    logger.debug("Overlap ratio: %.3f", overlap_ratio)
 
     return overlap_ratio >= threshold
 
@@ -224,7 +177,7 @@ def grounding_overlap_check(answer: str,
 def length_check(answer: str,
                  min_chars: int = 40) -> bool:
 
-    print("Entering validation layer 2")
+    logger.debug("Entering validation layer 2")
 
     return len(answer.strip()) >= min_chars
 
@@ -238,7 +191,7 @@ def llm_consistency_check(context: str,
                           answer: str,
                           model: str) -> bool:
 
-    print("Entering validation layer 3")
+    logger.debug("Entering validation layer 3")
 
     judge_prompt = (
         "Given the context, question, and answer below:\n\n"
@@ -250,10 +203,10 @@ def llm_consistency_check(context: str,
         "Reply with YES or NO only."
     )
 
-    response = call_remote_slm(
+    response = call_model(
         prompt=judge_prompt,
         model=model,
-        temperature=0
+        temperature=0,
     )
 
     verdict = response.strip().upper()
@@ -270,7 +223,7 @@ def semantic_similarity_check(answer: str,
                               threshold: float = 0.50,
                               embedding_model: str = "nomic-embed-text") -> bool:
 
-    print("Entering validation layer 4")
+    logger.debug("Entering validation layer 4")
 
     answer_emb = ollama.embeddings(
         model=embedding_model,
@@ -287,37 +240,14 @@ def semantic_similarity_check(answer: str,
         [context_emb]
     )[0][0]
 
-    print(f"Similarity obtained: {similarity}")
+    logger.debug("Similarity obtained: %.4f", similarity)
 
     return similarity >= threshold
 
 
 # =====================================================
-# 8️⃣ SAVE DATASET
+# 8️⃣ SAVE DATASET — Uses shared save_dataset from generators.utils
 # =====================================================
-
-def save_dataset(rows: List[Dict],
-                 output_path: str):
-
-    df = pd.DataFrame(rows)
-
-    file_exists = os.path.exists(output_path)
-
-    df.to_csv(
-        output_path,
-        mode="a",
-        index=False,
-        header=not file_exists
-    )
-
-    jsonl_path = output_path.replace(".csv", ".jsonl")
-
-    df.to_json(
-        jsonl_path,
-        orient="records",
-        lines=True,
-        mode="a"
-    )
 
 
 # =====================================================
@@ -328,14 +258,14 @@ def generate_rag_dataset(document_text: str,
                          output_path: str,
                          model: str,
                          difficulty: str = "medium",
-                         max_pairs: int = 10):
+                         max_pairs: int = 10) -> None:
 
-    print("Generating RAG dataset")
+    logger.info("Generating RAG dataset")
 
     chunks = chunk_text(document_text)
 
-    existing_questions = set()
-    dataset_rows = []
+    existing_questions: Set[str] = set()
+    dataset_rows: List[Dict[str, str]] = []
 
     if os.path.exists(output_path):
 
@@ -347,7 +277,7 @@ def generate_rag_dataset(document_text: str,
                 existing_df["question"].str.lower().str.strip()
             )
 
-    print(f"Total Chunks: {len(chunks)}")
+    logger.info("Total Chunks: %d", len(chunks))
 
     BATCH_SIZE = 4
 
@@ -381,19 +311,19 @@ def generate_rag_dataset(document_text: str,
                 normalized_question = question.lower()
 
                 if normalized_question in existing_questions:
-                    print("⚠ Duplicate question")
+                    logger.debug("Duplicate question")
                     continue
 
                 if not grounding_overlap_check(answer, chunk):
-                    print("⚠ Failed overlap")
+                    logger.debug("Failed overlap check")
                     continue
 
                 # if not length_check(answer):
-                #     print("⚠ Failed length")
+                #     logger.debug("Failed length check")
                 #     continue
 
                 if not semantic_similarity_check(answer, chunk):
-                    print("⚠ Failed semantic similarity")
+                    logger.debug("Failed semantic similarity")
                     continue
 
                 dataset_rows.append({
@@ -401,26 +331,26 @@ def generate_rag_dataset(document_text: str,
                     "question": question,
                     "answer": answer,
                     "difficulty": difficulty,
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 })
 
                 existing_questions.add(normalized_question)
 
-                print(f"✅ Added ({len(dataset_rows)}/{max_pairs})")
+                logger.info("Added (%d/%d)", len(dataset_rows), max_pairs)
 
         except Exception as e:
 
-            print(f"❌ Error: {e}")
+            logger.error("Error during QA generation: %s", e)
 
     if dataset_rows:
 
         save_dataset(dataset_rows, output_path)
 
-        print(f"\n🎯 Saved {len(dataset_rows)} QA pairs")
+        logger.info("Saved %d QA pairs", len(dataset_rows))
 
     else:
 
-        print("\n❌ No valid QA pairs generated")
+        logger.warning("No valid QA pairs generated")
 
 
 # =====================================================

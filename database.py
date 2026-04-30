@@ -1,22 +1,29 @@
+from typing import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.orm import Session
-from fastapi import Depends
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-DATABASE_URL = "postgresql://dataset_user:strongpassword@localhost/dataset_db"
+from config import settings
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    settings.database_url,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+)
 
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
 )
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db

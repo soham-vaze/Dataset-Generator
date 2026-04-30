@@ -16,7 +16,9 @@ confection==0.1.5
 cryptography==46.0.5
 ctranslate2==4.7.1
 cymem==2.0.13
+dnspython==2.8.0
 ecdsa==0.19.1
+email-validator==2.3.0
 emoji==2.15.0
 exceptiongroup==1.3.1
 fastapi==0.131.0
@@ -68,6 +70,7 @@ pycparser==3.0
 pycryptodome==3.23.0
 pydantic==2.12.5
 pydantic_core==2.41.5
+pydantic-settings==2.5.2
 Pygments==2.19.2
 PyPDF2==3.0.1
 python-dateutil==2.9.0.post0

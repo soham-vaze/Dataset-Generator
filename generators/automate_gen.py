@@ -1,50 +1,70 @@
+import argparse
 import json
-import subprocess
+import logging
 import os
+import subprocess
+from typing import List
 
-# Path to your requirements and your generator script
-REQUIREMENTS_FILE = "requirements.json"
-GENERATOR_SCRIPT = "dataset.py"
-MODEL = "llama3.1:8b"
+logger = logging.getLogger(__name__)
 
-def run_automation():
-    if not os.path.exists(REQUIREMENTS_FILE):
-        print(f"❌ Error: {REQUIREMENTS_FILE} not found.")
+# Defaults (overridable via CLI args)
+DEFAULT_REQUIREMENTS_FILE = "requirements.json"
+DEFAULT_GENERATOR_SCRIPT = "dataset.py"
+DEFAULT_MODEL = "llama3.1:8b"
+
+
+def run_automation(
+    requirements_file: str = DEFAULT_REQUIREMENTS_FILE,
+    generator_script: str = DEFAULT_GENERATOR_SCRIPT,
+    model: str = DEFAULT_MODEL,
+) -> None:
+    if not os.path.exists(requirements_file):
+        logger.error("Error: %s not found.", requirements_file)
         return
 
-    with open(REQUIREMENTS_FILE, "r") as f:
+    with open(requirements_file, "r", encoding="utf-8") as f:
         data = json.load(f)
     
     total_stories = 0
 
     for entry in data:
-        epic = entry["epic"]
-        feature = entry["feature"]
+        epic: str = entry["epic"]
+        feature: str = entry["feature"]
         
         for story in entry["stories"]:
-            print(f"\n{'='*60}")
-            print(f"🚀 PROCESSING: {story}")
-            print(f"{'='*60}")
+            logger.info("=" * 60)
+            logger.info("PROCESSING: %s", story)
+            logger.info("=" * 60)
             
-            command = [
-                "python3", GENERATOR_SCRIPT,
+            command: List[str] = [
+                "python3", generator_script,
                 "--epic", epic,
                 "--feature", feature,
                 "--story", story,
-                "--model", MODEL,
+                "--model", model,
                 "--batches", "1"
             ]
             
             try:
-                # Subprocess will run and wait; if it exit with 1 (fail), it raises error
-                subprocess.run(command, check=True)
-                print(f"✅ Finished Story: {story}. Moving to next...")
+                subprocess.run(command, check=True, timeout=600)
+                logger.info("Finished Story: %s. Moving to next...", story)
                 total_stories = total_stories + 1
             except subprocess.CalledProcessError:
-                print(f"🛑 Error: Generator failed to produce valid data for {story}. Stopping.")
-                return # Stop the entire loop if validation fails after all retries
+                logger.error("Generator failed to produce valid data for %s. Stopping.", story)
+                return
+            except subprocess.TimeoutExpired:
+                logger.error("Generator timed out for %s. Stopping.", story)
+                return
 
-    print(f"\n🏁 ALL {total_stories} STORIES and {total_stories * 4} ACCEPTANCE CRITERIAS PROCESSED SUCCESSFULLY.")
+    logger.info("ALL %d STORIES and %d ACCEPTANCE CRITERIAS PROCESSED SUCCESSFULLY.", total_stories, total_stories * 4)
+
 
 if __name__ == "__main__":
-    run_automation()
+    logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--requirements", default=DEFAULT_REQUIREMENTS_FILE, help="Path to requirements JSON file")
+    parser.add_argument("--generator", default=DEFAULT_GENERATOR_SCRIPT, help="Path to generator script")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Model to use")
+    args = parser.parse_args()
+
+    run_automation(args.requirements, args.generator, args.model)

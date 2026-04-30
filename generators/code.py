@@ -1,110 +1,14 @@
-import pandas as pd
-import os
-import json
-import requests
-import re
+import logging
 import math
-from datetime import datetime
-from typing import List, Dict, Set
+import os
+from datetime import datetime, timezone
+from typing import Dict, List, Set
 
+import pandas as pd
 
-# =====================================================
-# CONFIG
-# =====================================================
+from generators.utils import call_model, extract_json, normalize_text, save_dataset
 
-OLLAMA_URL = "http://10.30.1.34:11434/api/generate"
-
-
-# =====================================================
-# MODEL CALL
-# =====================================================
-
-def query_model(prompt: str, model: str, temperature: float = 0.8):
-
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_predict": 2000
-        }
-    }
-
-    response = requests.post(
-        OLLAMA_URL,
-        headers={"Content-Type": "application/json"},
-        json=payload,
-        timeout=180
-    )
-
-    response.raise_for_status()
-
-    return response.json()["response"]
-
-
-# =====================================================
-# JSON EXTRACTION
-# =====================================================
-
-def extract_json(text: str) -> Dict:
-
-    # Remove markdown
-    text = re.sub(r"```json|```", "", text).strip()
-
-    # Try direct parse
-    try:
-        return json.loads(text)
-    except:
-        pass
-
-    # Extract largest JSON block
-    matches = re.findall(r"\{.*?\}", text, re.DOTALL)
-
-    for match in reversed(matches):  # try biggest last
-        try:
-            return json.loads(match)
-        except:
-            continue
-
-    # Fallback: try fixing common issues
-    text_fixed = text.replace("\n", " ").replace("\t", " ")
-
-    try:
-        return json.loads(text_fixed)
-    except:
-        pass
-
-    raise ValueError(f"JSON parsing failed:\n{text[:500]}")
-
-# =====================================================
-# NORMALIZATION (DEDUP)
-# =====================================================
-
-def normalize_text(text: str) -> str:
-    return " ".join(text.lower().split())
-
-
-# =====================================================
-# SAVE
-# =====================================================
-
-def save_dataset(rows: List[Dict], output_path: str):
-
-    df = pd.DataFrame(rows)
-
-    file_exists = os.path.exists(output_path)
-
-    df.to_csv(
-        output_path,
-        mode="a",
-        index=False,
-        header=not file_exists
-    )
-
-    jsonl_path = output_path.replace(".csv", ".jsonl")
-
-    df.to_json(jsonl_path, orient="records", lines=True, mode="a")
+logger = logging.getLogger(__name__)
 
 
 # =====================================================
@@ -137,14 +41,14 @@ def generate_code_dataset(
     num_samples: int = 50,
     batch_size: int = 5,
     temperature: float = 0.8
-):
+) -> None:
 
-    print(f"\n🚀 Generating dataset for {domain} ({programming_language})")
+    logger.info("Generating dataset for %s (%s)", domain, programming_language)
 
     total_batches = math.ceil(num_samples / batch_size)
-    print(f"📦 Batch size: {batch_size} → {total_batches} batches")
+    logger.info("Batch size: %d — %d batches", batch_size, total_batches)
 
-    dataset_rows = []
+    dataset_rows: List[Dict[str, str]] = []
 
     existing_instructions: Set[str] = set()
 
@@ -166,7 +70,7 @@ def generate_code_dataset(
         remaining = num_samples - len(dataset_rows)
         current_batch_size = min(batch_size, remaining)
 
-        print(f"\n🔄 Batch attempt {attempts} | Generating {current_batch_size}")
+        logger.info("Batch attempt %d — generating %d", attempts, current_batch_size)
 
         prompt = f"""
 You are a strict JSON generator.
@@ -194,14 +98,16 @@ Format:
 }}
 """
 
+        response_text = ""
         try:
-            response_text = query_model(prompt, model, temperature)
+            response_text = call_model(prompt, model, temperature=temperature)
             data = extract_json(response_text)
+        except ModelNotFoundError:
+            raise
         except Exception as e:
-            print("\n❌ JSON PARSE FAILED")
-            print("----- RAW RESPONSE START -----")
-            print(response_text[:1000])   # print first 1000 chars
-            print("----- RAW RESPONSE END -----\n")
+            logger.warning("JSON parse failed: %s", e)
+            if response_text:
+                logger.debug("Raw response: %s", response_text[:500])
             continue
 
         valid_count = 0
@@ -215,12 +121,12 @@ Format:
 
             # Dedup check
             if norm_inst in existing_instructions:
-                print("⚠ Duplicate skipped")
+                logger.debug("Duplicate skipped")
                 continue
 
             # Quality filter
             if not basic_quality_filter(instruction, code):
-                print("⚠ Low quality skipped")
+                logger.debug("Low quality skipped")
                 continue
 
             dataset_rows.append({
@@ -228,26 +134,26 @@ Format:
                 "code": code,
                 "domain": domain,
                 "language": programming_language,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
             existing_instructions.add(norm_inst)
             valid_count += 1
 
-            print(f"✅ Accepted ({len(dataset_rows)}/{num_samples})")
+            logger.info("Accepted (%d/%d)", len(dataset_rows), num_samples)
 
             if len(dataset_rows) >= num_samples:
                 break
 
         if valid_count == 0:
-            print("⚠ Entire batch rejected")
+            logger.warning("Entire batch rejected")
 
     # SAVE
     if dataset_rows:
         save_dataset(dataset_rows, output_path)
-        print(f"\n🎯 Saved {len(dataset_rows)} samples.")
+        logger.info("Saved %d samples.", len(dataset_rows))
     else:
-        print("\n❌ No valid samples generated.")
+        logger.warning("No valid samples generated.")
 
 
 # =====================================================

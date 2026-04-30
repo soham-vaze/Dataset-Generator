@@ -1,67 +1,16 @@
-import pandas as pd
-import os
-import json
-from datetime import datetime
-from typing import List
 import logging
-import requests
 import math
-from argostranslate import translate, package
+import os
+import re
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 
-ml = logging.getLogger("multilingual")
+import pandas as pd
+from argostranslate import package, translate
 
-OLLAMA_URL = "http://10.30.1.34:11434/api/generate"
+from generators.utils import call_model, save_dataframe
 
-
-# =====================================================
-# UTIL: SAVE DATASET
-# =====================================================
-
-def save_dataset(df: pd.DataFrame, output_path: str):
-    file_exists = os.path.exists(output_path)
-    print("Saving the dataset")
-
-    df.to_csv(
-        output_path,
-        mode="a",
-        index=False,
-        header=not file_exists
-    )
-
-    jsonl_path = output_path.replace(".csv", ".jsonl")
-
-    df.to_json(
-        jsonl_path,
-        orient="records",
-        lines=True,
-        mode="a"
-    )
-
-
-# =====================================================
-# UTIL: MODEL CALL
-# =====================================================
-
-def query_model(prompt: str, model: str):
-
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False
-    }
-
-    response = requests.post(
-        OLLAMA_URL,
-        headers={"Content-Type": "application/json"},
-        json=payload,
-        timeout=180
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    return data["response"]
+logger = logging.getLogger(__name__)
 
 
 # =====================================================
@@ -114,16 +63,16 @@ LANGUAGE_MAP = {
     "vietnamese": "vi"
 }
 
-def get_language_code(lang_name: str):
+def get_language_code(lang_name: str) -> str:
     normalized = lang_name.strip().lower()
     if normalized not in LANGUAGE_MAP:
         raise ValueError(f"Unsupported language: {lang_name}")
     return LANGUAGE_MAP[normalized]
 
 
-def get_translation_model(source_lang: str, target_lang: str):
+def get_translation_model(source_lang: str, target_lang: str) -> Any:
 
-    print(f"🔎 Checking translation model for {source_lang} -> {target_lang}")
+    logger.info("Checking translation model for %s -> %s", source_lang, target_lang)
 
     installed_languages = translate.get_installed_languages()
 
@@ -132,7 +81,7 @@ def get_translation_model(source_lang: str, target_lang: str):
 
     if source is None or target is None:
 
-        print("⚠ Required language not installed. Attempting auto-install...")
+        logger.warning("Required language not installed. Attempting auto-install...")
 
         available_packages = package.get_available_packages()
 
@@ -149,7 +98,7 @@ def get_translation_model(source_lang: str, target_lang: str):
                 f"❌ No Argos model available for {source_lang} -> {target_lang}"
             )
 
-        print(f"⬇ Installing Argos model {source_lang} -> {target_lang} ...")
+        logger.info("Installing Argos model %s -> %s ...", source_lang, target_lang)
         package.install_from_path(pkg.download())
 
         installed_languages = translate.get_installed_languages()
@@ -169,7 +118,7 @@ def get_translation_model(source_lang: str, target_lang: str):
             f"❌ Translation pair exists but model not properly installed for {source_lang} -> {target_lang}"
         )
 
-    print(f"✅ Translation model ready: {source_lang} -> {target_lang}")
+    logger.info("Translation model ready: %s -> %s", source_lang, target_lang)
 
     return translation
 
@@ -186,26 +135,26 @@ def generate_multilingual_dataset(
     model: str,
     num_samples: int = 20,
     temperature: float = 0.8
-):
+) -> None:
 
     source_code = get_language_code(source_language)
     target_code = get_language_code(target_language)
 
-    print(f"Generating for topic {topic}")
+    logger.info("Generating for topic %s", topic)
 
     # Batch logic
     batch_size = min(20, num_samples)
     total_batches = math.ceil(num_samples / batch_size)
 
-    print(f"Using batch size {batch_size} ({total_batches} batches)")
+    logger.info("Using batch size %d (%d batches)", batch_size, total_batches)
 
-    all_sentences = []
+    all_sentences: List[str] = []
 
     for batch in range(total_batches):
 
         current_batch = min(batch_size, num_samples - len(all_sentences))
 
-        print(f"\nBatch {batch+1}/{total_batches} → generating {current_batch}")
+        logger.info("Batch %d/%d — generating %d", batch + 1, total_batches, current_batch)
 
         prompt = (
             f"Generate exactly {current_batch} natural sentences about '{topic}'.\n"
@@ -215,23 +164,23 @@ def generate_multilingual_dataset(
 
         try:
 
-            content = query_model(prompt, model)
+            content = call_model(prompt, model, temperature=temperature)
 
+        except ModelNotFoundError:
+            raise
         except Exception as e:
 
-            print("⚠ Model call failed:", e)
+            logger.warning("Model call failed: %s", e)
             continue
 
         if not content:
-            print("⚠ Empty model response")
+            logger.warning("Empty model response")
             continue
 
         content = content.strip()
 
         if content.startswith("```"):
             content = content.split("```")[1].strip()
-
-        import re
 
         sentences = re.split(r'\n+|(?<=[.!?])\s+', content)
         sentences = [s.strip() for s in sentences if s.strip()]
@@ -240,7 +189,7 @@ def generate_multilingual_dataset(
 
         sentences = sentences[:current_batch]
 
-        print("Parsed:", sentences)
+        logger.debug("Parsed %d sentences", len(sentences))
 
         all_sentences.extend(sentences)
 
@@ -250,18 +199,18 @@ def generate_multilingual_dataset(
 
     sentences = all_sentences[:num_samples]
 
-    print("Final sentence count:", len(sentences))
+    logger.info("Final sentence count: %d", len(sentences))
 
 
     # =====================================================
     # TRANSLATION (UNCHANGED)
     # =====================================================
 
-    print(f"starting translation for {source_code} -> {target_code}")
+    logger.info("Starting translation for %s -> %s", source_code, target_code)
 
     translator = get_translation_model(source_code, target_code)
 
-    pairs = []
+    pairs: List[Dict[str, str]] = []
 
     for sentence in sentences:
 
@@ -269,7 +218,7 @@ def generate_multilingual_dataset(
 
         pairs.append({
             "source_text": sentence,
-            "target_text": translated
+            "target_text": translated,
         })
 
 
@@ -278,11 +227,11 @@ def generate_multilingual_dataset(
     df["source_language"] = source_language
     df["target_language"] = target_language
     df["topic"] = topic
-    df["created_at"] = datetime.utcnow().isoformat()
+    df["created_at"] = datetime.now(timezone.utc).isoformat()
 
-    save_dataset(df, output_path)
+    save_dataframe(df, output_path)
 
-    print(f"✅ Saved {len(df)} multilingual pairs using Argos Translate.")
+    logger.info("Saved %d multilingual pairs using Argos Translate.", len(df))
 
 
 # =====================================================

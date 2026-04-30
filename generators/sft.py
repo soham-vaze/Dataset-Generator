@@ -1,92 +1,14 @@
-import requests
-import pandas as pd
+import logging
 import os
-import json
-import re
-import math
-from datetime import datetime
-from typing import List, Dict, Set
 import random
+from datetime import datetime, timezone
+from typing import Dict, List, Set
 
+import pandas as pd
 
-# ===============================
-# CONFIG
-# ===============================
+from generators.utils import ModelNotFoundError, call_model, extract_json, normalize_text, save_dataset
 
-SLM_API = "http://10.30.1.34:11434/api/generate"
-
-
-# ===============================
-# MODEL CALL
-# ===============================
-
-def call_remote_slm(prompt: str,
-                    model: str,
-                    temperature: float = 0.7) -> str:
-
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_predict": 2000
-        }
-    }
-
-    response = requests.post(
-        SLM_API,
-        json=payload,
-        headers={"Content-Type": "application/json"},
-        timeout=180
-    )
-
-    # response.raise_for_status()
-
-    # return response.json()["response"]
-
-    if response.status_code != 200:
-        raise Exception(f"HTTP {response.status_code}: {response.text}")
-
-    data = response.json()
-
-    if "response" not in data:
-        raise Exception(f"Invalid response format: {data}")
-
-    return data["response"]
-
-# ===============================
-# JSON EXTRACTION (ROBUST)
-# ===============================
-
-def extract_json(text: str) -> Dict:
-
-    text = re.sub(r"```json|```", "", text).strip()
-
-    # Try direct parsing
-    try:
-        return json.loads(text)
-    except:
-        pass
-
-    # Extract largest JSON block
-    matches = re.findall(r"\{[\s\S]*\}", text)
-
-    for match in reversed(matches):
-        try:
-            return json.loads(match)
-        except:
-            continue
-
-    raise ValueError(f"JSON parsing failed:\n{text[:500]}")
-
-
-# ===============================
-# NORMALIZATION (DEDUP)
-# ===============================
-
-def normalize_text(text: str) -> str:
-    return " ".join(text.lower().split())
+logger = logging.getLogger(__name__)
 
 
 # ===============================
@@ -111,27 +33,7 @@ def quality_filter(instruction: str, response: str) -> bool:
 # SAVE DATASET
 # ===============================
 
-def save_dataset(rows: List[Dict], output_path: str):
-
-    df = pd.DataFrame(rows)
-
-    file_exists = os.path.isfile(output_path)
-
-    df.to_csv(
-        output_path,
-        mode='a',
-        index=False,
-        header=not file_exists
-    )
-
-    jsonl_path = output_path.replace(".csv", ".jsonl")
-
-    df.to_json(
-        jsonl_path,
-        orient="records",
-        lines=True,
-        mode='a'
-    )
+# Uses shared save_dataset from generators.utils
 
 
 # ===============================
@@ -147,11 +49,9 @@ def generate_instruction_dataset(
     batch_size: int = 5,
     language: str = "English",
     temperature: float = 0.8
-):
+) -> None:
 
-    print(f"\n🚀 Generating dataset for topic: {topic}")
-    print(f"Language: {language}")
-    print(f"Batch size: {batch_size}\n")
+    logger.info("Generating dataset for topic: %s, language: %s, batch_size: %d", topic, language, batch_size)
 
     existing_instructions: Set[str] = set()
 
@@ -167,9 +67,9 @@ def generate_instruction_dataset(
 
     for model in models:
 
-        print(f"\n🤖 Model: {model}")
+        logger.info("Using model: %s", model)
 
-        dataset_rows = []
+        dataset_rows: List[Dict[str, str]] = []
 
         attempts = 0
         max_attempts = num_samples * 5
@@ -181,7 +81,7 @@ def generate_instruction_dataset(
             remaining = num_samples - len(dataset_rows)
             current_batch = min(batch_size, remaining)
 
-            print(f"\n🔄 Attempt {attempts} → generating {current_batch}")
+            logger.info("Attempt %d — generating %d samples", attempts, current_batch)
 
             prompt = f"""
 You are a strict JSON generator.
@@ -211,19 +111,18 @@ Format:
 """
 
             try:
-                response_text = call_remote_slm(
+                response_text = call_model(
                     prompt=prompt,
                     model=model,
-                    temperature=random.uniform(0.6, 0.9)
+                    temperature=random.uniform(0.6, 0.9),
                 )
 
                 data = extract_json(response_text)
 
+            except ModelNotFoundError:
+                raise
             except Exception as e:
-                print("\n❌ JSON PARSE FAILED")
-                print("----- RAW RESPONSE START -----")
-                # print(response_text[:1000])
-                print("----- RAW RESPONSE END -----\n")
+                logger.warning("JSON parse failed: %s", e)
                 continue
 
             valid_count = 0
@@ -237,12 +136,12 @@ Format:
 
                 # Dedup
                 if norm_inst in existing_instructions:
-                    print("⚠ Duplicate skipped")
+                    logger.debug("Duplicate skipped")
                     continue
 
                 # Quality filter
                 if not quality_filter(instruction, response):
-                    print("⚠ Low quality skipped")
+                    logger.debug("Low quality skipped")
                     continue
 
                 dataset_rows.append({
@@ -252,29 +151,29 @@ Format:
                     "style": style,
                     "topic": topic,
                     "language": language,
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 })
 
                 existing_instructions.add(norm_inst)
                 valid_count += 1
 
-                print(f"✅ Accepted ({len(dataset_rows)}/{num_samples})")
+                logger.info("Accepted (%d/%d)", len(dataset_rows), num_samples)
 
                 if len(dataset_rows) >= num_samples:
                     break
 
             if valid_count == 0:
-                print("⚠ Entire batch rejected")
+                logger.warning("Entire batch rejected")
 
         # SAVE per model
         if dataset_rows:
             save_dataset(dataset_rows, output_csv_path)
-            print(f"\n🎯 Saved {len(dataset_rows)} samples for {model}")
+            logger.info("Saved %d samples for %s", len(dataset_rows), model)
             total_added += len(dataset_rows)
         else:
-            print(f"\n❌ No valid samples for {model}")
+            logger.warning("No valid samples for %s", model)
 
-    print(f"\n🚀 TOTAL samples added: {total_added}")
+    logger.info("TOTAL samples added: %d", total_added)
 
 
 # ===============================

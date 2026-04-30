@@ -1,0 +1,64 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# ========================
+# Environment / Secrets
+# ========================
+.env
+*.env.local
+
+# ========================
+# IDE / Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ========================
+# Node / Frontend
+# ========================
+node_modules/
+dataset-studio/dist/
+
+# ========================
+# Generated data / Storage
+# ========================
+local_storage/
+*.jsonl
+*.csv
+
+# ========================
+# Database
+# ========================
+*.db
+*.sqlite3
+
+# ========================
+# Logs
+# ========================
+*.log
+
+# ========================
+# OS
+# ========================
+Desktop.ini
+ehthumbs.db

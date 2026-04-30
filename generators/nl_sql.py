@@ -1,53 +1,29 @@
 import json
-import sqlite3
-import pandas as pd
+import logging
+import math
 import os
 import re
-import requests
-import math
-from datetime import datetime
-from typing import Dict, List, Tuple
+import sqlite3
+from datetime import datetime, timezone
+from typing import Dict, List, Set, Tuple
 
+import pandas as pd
 
-OLLAMA_URL = "http://10.30.1.34:11434/api/generate"
+from generators.utils import call_model, save_dataset
 
-
-# ======================================================
-# MODEL CALL
-# ======================================================
-
-def query_model(prompt: str, model: str):
-
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False
-    }
-
-    response = requests.post(
-        OLLAMA_URL,
-        headers={"Content-Type": "application/json"},
-        json=payload,
-        timeout=180
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    return data["response"]
+logger = logging.getLogger(__name__)
 
 
 # ======================================================
 # 1️⃣ LOAD AND PARSE USER SCHEMA
 # ======================================================
 
-def load_schema(schema_path: str) -> Dict:
-    with open(schema_path, "r") as f:
+def load_schema(schema_path: str) -> Dict[str, List[Dict[str, str]]]:
+    with open(schema_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def json_to_sqlite_ddl(schema: Dict) -> Tuple[List[str], Dict]:
+def json_to_sqlite_ddl(schema: Dict[str, List[Dict[str, str]]]) -> Tuple[List[str], Dict[str, List[str]]]:
 
     ddl_statements = []
     column_map = {}
@@ -99,7 +75,7 @@ Schema:
 {schema_text}
 """
 
-    response = query_model(prompt, model)
+    response = call_model(prompt, model, temperature=temperature)
 
     sql_query = response.strip()
 
@@ -113,7 +89,21 @@ Schema:
 # ======================================================
 
 def validate_columns(sql_query: str,
-                     column_map: Dict) -> bool:
+                     column_map: Dict[str, List[str]]) -> bool:
+
+    SQL_KEYWORDS = {
+        "SELECT", "FROM", "WHERE", "AND", "OR",
+        "JOIN", "ON", "GROUP", "BY", "ORDER",
+        "HAVING", "COUNT", "SUM", "AVG", "MIN", "MAX",
+        "LIMIT", "AS", "INNER", "LEFT", "RIGHT",
+        "INSERT", "UPDATE", "DELETE", "INTO", "VALUES", "SET",
+        "NOT", "NULL", "IN", "BETWEEN", "LIKE", "IS", "EXISTS",
+        "DISTINCT", "DESC", "ASC", "UNION", "ALL", "CREATE", "TABLE",
+        "CROSS", "OUTER", "FULL", "CASE", "WHEN", "THEN", "ELSE", "END",
+        "TRUE", "FALSE", "OFFSET", "FETCH", "FIRST", "NEXT", "ROWS",
+        "ONLY", "NATURAL", "USING", "EXCEPT", "INTERSECT", "TOP",
+        "WITH", "RECURSIVE", "OVER", "PARTITION", "RANK", "ROW_NUMBER",
+    }
 
     tokens = re.findall(r"\b[a-zA-Z_]+\b", sql_query)
 
@@ -123,19 +113,18 @@ def validate_columns(sql_query: str,
 
     for token in tokens:
 
+        if token.upper() in SQL_KEYWORDS:
+            continue
+
         if token in valid_tables:
             continue
 
         if token in valid_columns:
             continue
 
-        if token.upper() in {
-            "SELECT","FROM","WHERE","AND","OR",
-            "JOIN","ON","GROUP","BY","ORDER",
-            "HAVING","COUNT","SUM","AVG","MIN","MAX",
-            "LIMIT","AS","INNER","LEFT","RIGHT"
-        }:
-            continue
+        # Unknown identifier — likely a hallucinated column/table
+        logger.debug("Unknown token in SQL: %s", token)
+        return False
 
     return True
 
@@ -148,20 +137,15 @@ def validate_execution(sql_query: str,
                        ddl_statements: List[str]) -> bool:
 
     try:
-
-        conn = sqlite3.connect(":memory:")
-        cursor = conn.cursor()
-
-        for ddl in ddl_statements:
-            cursor.execute(ddl)
-
-        cursor.execute(sql_query)
-
-        conn.close()
-
+        with sqlite3.connect(":memory:") as conn:
+            cursor = conn.cursor()
+            for ddl in ddl_statements:
+                cursor.execute(ddl)
+            cursor.execute(sql_query)
         return True
 
-    except Exception:
+    except sqlite3.Error as e:
+        logger.debug("SQL execution validation failed: %s", e)
         return False
 
 
@@ -182,7 +166,7 @@ SQL:
 {sql_query}
 """
 
-    response = query_model(prompt, model)
+    response = call_model(prompt, model, temperature=temperature)
 
     question = response.strip()
 
@@ -192,26 +176,8 @@ SQL:
 
 
 # ======================================================
-# 6️⃣ SAVE DATASET
+# 6️⃣ SAVE DATASET — Uses shared save_dataset from generators.utils
 # ======================================================
-
-def save_dataset(rows: List[Dict],
-                 output_path: str):
-
-    df = pd.DataFrame(rows)
-
-    file_exists = os.path.isfile(output_path)
-
-    df.to_csv(
-        output_path,
-        mode='a',
-        index=False,
-        header=not file_exists
-    )
-
-    jsonl_path = output_path.replace(".csv", ".jsonl")
-
-    df.to_json(jsonl_path, orient="records", lines=True, mode="a")
 
 
 # ======================================================
@@ -221,18 +187,18 @@ def save_dataset(rows: List[Dict],
 def generate_nl2sql_dataset(schema_path: str,
                             output_path: str,
                             model: str,
-                            num_samples: int = 10):
+                            num_samples: int = 10) -> None:
 
-    print("Generating NL-SQL dataset")
+    logger.info("Generating NL-SQL dataset")
 
     schema = load_schema(schema_path)
 
     ddl_statements, column_map = json_to_sqlite_ddl(schema)
 
-    dataset_rows = []
+    dataset_rows: List[Dict[str, str]] = []
 
-    existing_sql = set()
-    existing_questions = set()
+    existing_sql: Set[str] = set()
+    existing_questions: Set[str] = set()
 
     if os.path.exists(output_path):
 
@@ -248,7 +214,7 @@ def generate_nl2sql_dataset(schema_path: str,
 
     total_batches = math.ceil(num_samples / batch_size)
 
-    print(f"Using batch size {batch_size} ({total_batches} batches)")
+    logger.info("Using batch size %d (%d batches)", batch_size, total_batches)
 
     attempts = 0
 
@@ -264,15 +230,15 @@ def generate_nl2sql_dataset(schema_path: str,
         normalized_sql = " ".join(sql_query.lower().split())
 
         if normalized_sql in existing_sql:
-            print("⚠ Duplicate SQL detected")
+            logger.debug("Duplicate SQL detected")
             continue
 
         if not validate_columns(sql_query, column_map):
-            print("⚠ Column validation failed")
+            logger.debug("Column validation failed")
             continue
 
         if not validate_execution(sql_query, ddl_statements):
-            print("⚠ SQL execution failed")
+            logger.debug("SQL execution failed")
             continue
 
         question = generate_question_from_sql(sql_query, model)
@@ -280,19 +246,19 @@ def generate_nl2sql_dataset(schema_path: str,
         normalized_question = " ".join(question.lower().split())
 
         if normalized_question in existing_questions:
-            print("⚠ Duplicate question detected")
+            logger.debug("Duplicate question detected")
             continue
 
         dataset_rows.append({
             "english_question": question,
             "sql_query": sql_query,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
         existing_sql.add(normalized_sql)
         existing_questions.add(normalized_question)
 
-        print(f"✅ Valid pair generated ({len(dataset_rows)}/{num_samples})")
+        logger.info("Valid pair generated (%d/%d)", len(dataset_rows), num_samples)
 
 
     if dataset_rows:
