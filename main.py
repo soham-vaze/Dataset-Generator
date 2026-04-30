@@ -92,7 +92,7 @@ def sft_dataset(
         output_csv_path=str(output_path),
         models=[model],
         style=style,
-        num_pairs=num_pairs,
+        num_samples=num_pairs,
         language=language,
         temperature=temperature
     )
@@ -363,9 +363,12 @@ def delete_dataset(
     return {"message": "Dataset deleted successfully"}
 
 
-# =====================================================
-# AUTH ROUTES
-# =====================================================
+@app.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {"id": str(current_user.id), "email": current_user.email}
+
+
+
 
 @app.post("/register")
 def register(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):

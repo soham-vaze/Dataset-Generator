@@ -1,3 +1,29 @@
+const supportedLanguages = [
+  "Albanian", "Arabic", "Azerbaijani", "Basque", "Bengali", "Bulgarian", 
+  "Catalan", "Chinese", "Chinese (traditional)", "Czech", "Danish", 
+  "Dutch", "English", "Esperanto", "Estonian", "Finnish", "French", 
+  "Galician", "German", "Greek", "Hebrew", "Hindi", "Hungarian", 
+  "Indonesian", "Irish", "Italian", "Japanese", "Korean", "Kyrgyz", 
+  "Latvian", "Lithuanian", "Malay", "Norwegian", "Persian", "Polish", 
+  "Portuguese", "Portuguese (Brazil)", "Romanian", "Russian", "Slovak", 
+  "Slovenian", "Spanish", "Swedish", "Tagalog", "Thai", "Turkish", 
+  "Ukrainian", "Urdu", "Vietnamese"
+];
+
+export const languageMapping = {
+  "Portuguese": ["English", "Spanish"],
+  "Spanish": ["English", "Portuguese"],
+  "English": supportedLanguages.filter(l => l !== "English"),
+  // Default for all others: they can only go to English
+  ...supportedLanguages.reduce((acc, lang) => {
+    if (!["English", "Spanish", "Portuguese"].includes(lang)) {
+      acc[lang] = ["English"];
+    }
+    return acc;
+  }, {})
+};
+
+
 export const datasetConfigs = {
   // =====================================================
   // 1️⃣ SFT Instruction Dataset
@@ -7,7 +33,9 @@ export const datasetConfigs = {
     endpoint: "/generate/sft",
     fields: [
       { name: "topic", label: "Topic", type: "text" },
-      { name: "model", label: "Model", type: "text" },
+      { name: "model", label: "Model", type: "select",
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
+       },
       {
         name: "style",
         label: "Style",
@@ -29,7 +57,9 @@ export const datasetConfigs = {
     endpoint: "/generate/nl_sql",
     fields: [
       { name: "schema_file", label: "Schema File (.json)", type: "file" },
-      { name: "model", label: "Model", type: "text" },
+      { name: "model", label: "Model", type: "select",
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
+       },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "output_name", label: "Output Name", type: "text" },
     ],
@@ -43,7 +73,9 @@ export const datasetConfigs = {
     endpoint: "/generate/rag_qa",
     fields: [
       { name: "context_file", label: "Context File (.txt / .pdf)", type: "file" },
-      { name: "model", label: "Model", type: "text" },
+      { name: "model", label: "Model", type: "select",
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
+       },
       {
         name: "difficulty",
         label: "Difficulty",
@@ -67,7 +99,9 @@ export const datasetConfigs = {
         label: "Task Description",
         type: "textarea",
       },
-      { name: "model", label: "Model", type: "text" },
+      { name: "model", label: "Model", type: "select",
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
+       },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "output_name", label: "Output Name", type: "text" },
     ],
@@ -86,7 +120,9 @@ export const datasetConfigs = {
         label: "Programming Language",
         type: "text",
       },
-      { name: "model", label: "Model", type: "text" },
+      { name: "model", label: "Model", type: "select",
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
+       },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "temperature", label: "Temperature", type: "number", step: "0.1" },
       { name: "output_name", label: "Output Name", type: "text" },
@@ -96,104 +132,26 @@ export const datasetConfigs = {
   // =====================================================
   // 6️⃣ Multilingual Dataset
   // =====================================================
-  // =====================================================
-// 6️⃣ Multilingual Dataset
-// =====================================================
   multilingual: {
     label: "Multilingual",
     endpoint: "/generate/multilingual",
     fields: [
       { name: "topic", label: "Topic", type: "text" },
-
       {
         name: "source_language",
         label: "Source Language",
         type: "select",
-        options: [
-          "Arabic",
-          "Azerbaijani",
-          "Basque",
-          "Catalan",
-          "Chinese",
-          "Czech",
-          "Danish",
-          "Dutch",
-          "English",
-          "Esperanto",
-          "Finnish",
-          "French",
-          "Galician",
-          "German",
-          "Greek",
-          "Hebrew",
-          "Hindi",
-          "Hungarian",
-          "Indonesian",
-          "Irish",
-          "Italian",
-          "Japanese",
-          "Kyrgyz",
-          "Korean",
-          "Malay",
-          "Persian",
-          "Polish",
-          "Portuguese",
-          "Portuguese (Brazil)",
-          "Russian",
-          "Slovak",
-          "Spanish",
-          "Swedish",
-          "Turkish",
-          "Ukrainian",
-          "Urdu"
-        ],
+        options: supportedLanguages, // Use the variable
       },
-
       {
         name: "destination_language",
         label: "Target Language",
         type: "select",
-        options: [
-          "Arabic",
-          "Azerbaijani",
-          "Basque",
-          "Catalan",
-          "Chinese",
-          "Czech",
-          "Danish",
-          "Dutch",
-          "English",
-          "Esperanto",
-          "Finnish",
-          "French",
-          "Galician",
-          "German",
-          "Greek",
-          "Hebrew",
-          "Hindi",
-          "Hungarian",
-          "Indonesian",
-          "Irish",
-          "Italian",
-          "Japanese",
-          "Kyrgyz",
-          "Korean",
-          "Malay",
-          "Persian",
-          "Polish",
-          "Portuguese",
-          "Portuguese (Brazil)",
-          "Russian",
-          "Slovak",
-          "Spanish",
-          "Swedish",
-          "Turkish",
-          "Ukrainian",
-          "Urdu"
-        ],
+        options: [], // Leave empty, Dashboard will populate this
       },
-
-      { name: "model", label: "Generation Model", type: "text" },
+      { name: "model", label: "Generation Model", type: "select",
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
+       },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "temperature", label: "Temperature", type: "number", step: "0.1" },
       { name: "output_name", label: "Output Name", type: "text" },

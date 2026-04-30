@@ -9,7 +9,7 @@ from typing import List, Dict
 # CONFIG
 # ===============================
 SLM_API = "http://10.30.1.34:11434/api/generate"
-OUTPUT_JSONL = "/home/soham/dataset_generator/datasets/qa_finetuning_v2.jsonl"
+OUTPUT_JSONL = "/home/soham/dataset_generator/datasets/qa_finetuning_v3.jsonl"
 
 def call_remote_slm(prompt: str, model: str) -> str:
     payload = {

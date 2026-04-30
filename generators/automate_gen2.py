@@ -3,8 +3,8 @@ import subprocess
 import os
 
 # Path to your requirements and your generator script
-REQUIREMENTS_FILE = "requirements.json"
-GENERATOR_SCRIPT = "dataset.py"
+REQUIREMENTS_FILE = "req2.json"
+GENERATOR_SCRIPT = "dataset2.py"
 MODEL = "llama3.1:8b"
 
 def run_automation():

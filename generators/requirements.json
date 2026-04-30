@@ -1,192 +1,182 @@
 [
   {
-    "epic": "Auction & Bidding Engine",
-    "feature": "Real-time Proxy Bidding",
+    "epic": "User Identity & Subscription",
+    "feature": "Media Access Control",
     "stories": [
-      "Incremental Automatic Bid Logic",
-      "Outbid Notification Trigger",
-      "Reserve Price Not Met Notification",
-      "Last-Second Bid (Sniping) Buffer Check"
+      "Apple ID Authentication and Family Sharing Linkage",
+      "Subscription Tier Verification (Student/Individual/Family)",
+      "Regional Content Licensing Gating based on Geo-IP"
     ]
   },
   {
-    "epic": "Auction & Bidding Engine",
-    "feature": "Best Offer Negotiation",
+    "epic": "User Identity & Subscription",
+    "feature": "User Profile & Social",
     "stories": [
-      "Automated Counter-Offer Thresholds",
-      "Offer Expiry Logic (48 Hours)",
-      "Multi-Quantity Best Offer Validation"
+      "Public Profile Creation and Handle Validation",
+      "Friend Following and Listening Activity Privacy Toggle",
+      "Shared Playlist Collaboration and Contribution Rights"
     ]
   },
   {
-    "epic": "Seller Listing & Inventory",
-    "feature": "Draft Management System",
+    "epic": "Music Library Management",
+    "feature": "Cloud Music Library",
     "stories": [
-      "Bulk Listing Template Application",
-      "Scheduled Listing Start-Time Logic",
-      "AI-Based Category Suggestion Engine",
-      "Auto-Relist for Unsold Items"
+      "Syncing Personal Library across Web, iOS, and macOS",
+      "Matching Local Audio Files with Apple Music Catalog",
+      "Smart Playlist Logic based on Metadata Filters"
     ]
   },
   {
-    "epic": "Seller Listing & Inventory",
-    "feature": "Vehicle & Parts Compatibility",
+    "epic": "Music Library Management",
+    "feature": "Library Organization",
     "stories": [
-      "My Garage Vehicle Fitment Filter",
-      "VIN Decoder for Auto Listings",
-      "Parts Compatibility Table Verification"
+      "Adding/Removing Albums and Tracks to 'Favorite' State",
+      "Custom Folder Hierarchy for Playlist Management",
+      "Bulk Metadata Editing for Personal Uploads"
     ]
   },
   {
-    "epic": "Buyer Experience & Personalization",
-    "feature": "Saved Search & Feed Alerts",
+    "epic": "Playback & Audio Engine",
+    "feature": "High-Fidelity Streaming",
     "stories": [
-      "Instant Push Notification for New Matches",
-      "Search Result Personalization Ranking",
-      "Seller Newsletter Subscription Opt-in",
-      "Daily Deals Targeted Carousel"
+      "Lossless (ALAC) Audio Bitrate Adaptation",
+      "Spatial Audio (Dolby Atmos) Metadata Rendering",
+      "Gapless Playback Execution between Album Tracks"
     ]
   },
   {
-    "epic": "Buyer Experience & Personalization",
-    "feature": "Watchlist & Cart Management",
+    "epic": "Playback & Audio Engine",
+    "feature": "Playback Controls",
     "stories": [
-      "Watchlist Price Drop Alert",
-      "Combined Shipping Calculation in Cart",
-      "Seller-Initiated Discount for Watchers"
+      "Cross-device Playback Handoff and Remote Control",
+      "Shuffle and Repeat Logic (Track vs. Album)",
+      "AirPlay 2 Output Selection and Latency Sync"
     ]
   },
   {
-    "epic": "Payments & Managed Funds",
-    "feature": "Seller Payout Optimization",
+    "epic": "Search & Discovery",
+    "feature": "Global Search Engine",
     "stories": [
-      "Direct Bank Payout Scheduling",
-      "Final Value Fee Automated Deduction",
-      "Pending Funds Hold for New Sellers",
-      "Tax Document (1099-K) Generation"
+      "Search by Lyrics, Artist, Album, or Mood",
+      "Fuzzy Match and Auto-Correction for Localized Titles",
+      "Recent Search History and Trending Suggestion Logic"
     ]
   },
   {
-    "epic": "Payments & Managed Funds",
-    "feature": "Multi-Payment Method Support",
+    "epic": "Search & Discovery",
+    "feature": "Personalized Recommendations",
     "stories": [
-      "PayPal and Apple Pay Integration",
-      "eBay Gift Card Balance Application",
-      "Split Payment for High-Value Items"
+      "Personal Station Generation based on Listening Habits",
+      "Daily 'Made For You' Playlist Update Logic",
+      "New Release Alerts for Followed Artists"
     ]
   },
   {
-    "epic": "Trust, Safety & Resolution",
-    "feature": "eBay Money Back Guarantee",
+    "epic": "Browse & Curated Content",
+    "feature": "Editorial Integration",
     "stories": [
-      "Item Not Received Claim Workflow",
-      "Return Label Generation (Seller-Paid)",
-      "Escalation to eBay Customer Secret",
-      "Evidence Upload for 'Item Not As Described'"
+      "Dynamic Home Feed Rendering for Editorially Curated Sets",
+      "Category Browsing (Genre, Decades, Activities)",
+      "Top Charts Visualization (Global vs. Local City)"
     ]
   },
   {
-    "epic": "Trust, Safety & Resolution",
-    "feature": "Seller Performance Metrics",
+    "epic": "Browse & Curated Content",
+    "feature": "Apple Music Radio",
     "stories": [
-      "Defect Rate Warning System",
-      "Top-Rated Seller Badge Validation",
-      "Account Suspension Appeal Workflow"
+      "Live Stream Playback for Apple Music 1/Hits/Country",
+      "On-Demand Access to Archived Radio Shows",
+      "Real-time Song Metadata Sync for Live Broadcasts"
     ]
   },
   {
-    "epic": "Global Shipping Program (GSP)",
-    "feature": "International Customs & Duty",
+    "epic": "Interactive Features",
+    "feature": "Apple Music Sing (Lyrics)",
     "stories": [
-      "Automated Import Fee Calculation",
-      "Global Hub Routing Instruction",
-      "Restricted Item International Filter",
-      "Carrier Tracking Milestone Translation"
+      "Time-synced Lyrics Rendering (Line-by-line)",
+      "Adjustable Vocal Fader for Karaoke Mode",
+      "Duet-view Layout for Multi-vocal Tracks"
     ]
   },
   {
-    "epic": "Global Shipping Program (GSP)",
-    "feature": "Domestic Warehouse Handover",
+    "epic": "Interactive Features",
+    "feature": "Video Content",
     "stories": [
-      "GSP Reference Number Generation",
-      "Domestic-to-International Label Swap",
-      "Warehouse Weight and Dim Verification"
+      "Music Video 4K Playback and Backgrounding",
+      "Artist Interview and Documentary Chapter Indexing",
+      "Live Concert Stream Low-latency Delivery"
     ]
   },
   {
-    "epic": "Feedback & Reputation System",
-    "feature": "Detailed Seller Ratings (DSR)",
+    "epic": "Artist & Creator Tools",
+    "feature": "Artist for Media",
     "stories": [
-      "Five-Star Criteria Aggregation",
-      "Review Revisions Request Workflow",
-      "Buyer Feedback Removal Policy Logic",
-      "Automated Positive Feedback Reminder"
+      "Artist Biography and Discography Metadata Sync",
+      "Official Artist Page Verification Badge Logic",
+      "Essential Album Identification and Highlighting"
     ]
   },
   {
-    "epic": "Feedback & Reputation System",
-    "feature": "Seller Response Management",
+    "epic": "Artist & Creator Tools",
+    "feature": "Creator Analytics Ingestion",
     "stories": [
-      "Public Reply to Negative Feedback",
-      "Feedback Star Color Progression",
-      "Historical Feedback Archive Access"
+      "Real-time Stream Count Tracking for Artists",
+      "Listener Demographics and Geographic Heatmaps",
+      "Shazam Insight Integration for Trending Data"
     ]
   },
   {
-    "epic": "Marketing & Promotions",
-    "feature": "eBay Ad Commerce (Promoted Listings)",
+    "epic": "Monetization & Rights",
+    "feature": "Royalty & Licensing",
     "stories": [
-      "Ad Rate Suggestion based on Trends",
-      "Campaign Click-Through Analytics",
-      "Sponsored Item Ranking Placement",
-      "Marketing Dashboard Spend Control"
+      "Stream Attribution Logic for Performance Rights",
+      "Master Recording vs. Composition Share Calculation",
+      "Mechanical License Compliance for Cover Versions"
     ]
   },
   {
-    "epic": "Marketing & Promotions",
-    "feature": "Markdown Manager",
+    "epic": "Fintech & Payments",
+    "feature": "Billing Workflow",
     "stories": [
-      "Store-wide Percentage Discount Sale",
-      "Buy-One-Get-One (BOGO) Pricing",
-      "Holiday Sale Timer Component"
+      "In-App Purchase (IAP) Token Validation",
+      "Prorated Refund for Plan Downgrades",
+      "Redemption of Apple Gift Cards and Promo Codes"
     ]
   },
   {
-    "epic": "Authenticated Luxury & Collectibles",
-    "feature": "Authentication Hub Workflow",
+    "epic": "Security & Privacy",
+    "feature": "Digital Rights Management (DRM)",
     "stories": [
-      "Expert Verifier Condition Scoring",
-      "Authenticator NFC Tag Encoding",
-      "Rejection and Return to Seller Logic",
-      "Verified Badge Search Presence"
+      "FairPlay Streaming Content Encryption/Decryption",
+      "Concurrent Stream Limit Enforcement (1 per user)",
+      "Offline Token Expiry and Renewal Handshake"
     ]
   },
   {
-    "epic": "Authenticated Luxury & Collectibles",
-    "feature": "High-Value Escrow",
+    "epic": "Security & Privacy",
+    "feature": "Child Safety",
     "stories": [
-      "Crypto-Payment Verification (Whitelisted)",
-      "Escrow Fund Release on Handover",
-      "Certified Appraiser Appointment Booking"
+      "Explicit Content Filtering Toggle and Password Lock",
+      "Screen Time Integration for Media Usage Limits",
+      "Safe-Search Enforcement for Restricted Profiles"
     ]
   },
   {
-    "epic": "Messaging & Notification Hub",
-    "feature": "Seller-Buyer Messaging Portal",
+    "epic": "Ecosystem & Platform",
+    "feature": "Apple Music Web UI",
     "stories": [
-      "Spam and Phishing Link Detection",
-      "Message Read Receipt Confirmation",
-      "Automated Out-of-Office Vacation Mode",
-      "Attachment Preview (JPG/PDF)"
+      "PWA (Progressive Web App) Offline State Caching",
+      "Keyboard Shortcut Mapping for Media Keys",
+      "Dark Mode and System-wide UI Theme Sync"
     ]
   },
   {
-    "epic": "Messaging & Notification Hub",
-    "feature": "Push & Email Preference Center",
+    "epic": "Ecosystem & Platform",
+    "feature": "Third-Party SDK (MusicKit)",
     "stories": [
-      "Granular Alert Frequency Controls",
-      "Silent Night-Mode Notification Logic",
-      "SMS Order Status Opt-in/Out"
+      "OAuth 2.0 Music User Token Authorization",
+      "Embedded Player API and Event Callback Logic",
+      "Cross-App Playlist Modification Permissions"
     ]
   }
 ]

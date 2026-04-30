@@ -3,6 +3,7 @@ import axios from "axios";
 import { Trash2, Eye, ExternalLink } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
+import { useAuth } from "../context/AuthContext";
 
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
@@ -10,6 +11,7 @@ import "ag-grid-community/styles/ag-theme-alpine.css";
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function DatasetsPage() {
+  const { token } = useAuth();
   const [datasetType, setDatasetType] = useState("sft");
   const [datasets, setDatasets] = useState([]);
   const [rowData, setRowData] = useState([]);
@@ -31,7 +33,12 @@ export default function DatasetsPage() {
 
   const fetchDatasets = async () => {
     const res = await axios.get(
-      `${BASE_URL}/datasets?dataset_type=${datasetType}`
+      `${BASE_URL}/datasets?dataset_type=${datasetType}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
     setDatasets(res.data.datasets);
   };
@@ -40,56 +47,67 @@ export default function DatasetsPage() {
     fetchDatasets();
   }, [datasetType]);
 
-  const fetchCSV = async (filename) => {
-    const res = await axios.get(
-      `${BASE_URL}/datasets/${datasetType}/${filename}`
-    );
-
-    console.log("CSV Response:", res.data);
-
-    parseCSV(res.data);
-    setSelectedFile(filename);
-    setShowModal(true);
+  const fetchCSV = async (dataset) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/datasets/${dataset.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "text",
+      });
+      parseCSV(res.data);
+      setSelectedFile(dataset.name);
+      setShowModal(true);
+    } catch (err) {
+      console.error("Error fetching CSV:", err);
+    }
   };
 
-  const openFullScreen = (filename) => {
-    const url = `${BASE_URL}/datasets/${datasetType}/${filename}`;
-    window.open(url, "_blank");
+  const openFullScreen = (dataset) => {
+    window.open(`/view-dataset/${dataset.id}`, "_blank");
   };
 
   const parseCSV = (csvText) => {
-    const rows = csvText.trim().split("\n").map((row) => row.split(","));
+    const rows = [];
+    let current = "";
+    let inQuotes = false;
+    const text = csvText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    let row = [];
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '"') {
+        if (inQuotes && text[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (ch === "," && !inQuotes) {
+        row.push(current); current = "";
+      } else if (ch === "\n" && !inQuotes) {
+        row.push(current); rows.push(row); row = []; current = "";
+      } else {
+        current += ch;
+      }
+    }
+    if (current || row.length) { row.push(current); if (row.some(Boolean)) rows.push(row); }
 
     if (!rows.length) return;
-
     const headers = rows[0];
-    const dataRows = rows.slice(1);
-
-    console.log("Headers:", headers);
-    console.log("Data rows:", dataRows);
-
-    const cols = headers.map((header) => ({
-      headerName: header,
-      field: header,
-    }));
-
-    const formattedRows = dataRows.map((row) => {
-      let obj = {};
-      headers.forEach((header, i) => {
-        obj[header] = row[i] || "";
-      });
+    const cols = headers.map((h) => ({ headerName: h, field: h, tooltipField: h }));
+    const formattedRows = rows.slice(1).map((r) => {
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = r[i] ?? ""; });
       return obj;
     });
-
     setColumnDefs(cols);
     setRowData(formattedRows);
   };
 
-  const deleteDataset = async (filename) => {
-    await axios.delete(
-      `${BASE_URL}/datasets/${datasetType}/${filename}`
-    );
-    fetchDatasets();
+  const deleteDataset = async (datasetId) => {
+    try {
+      await axios.delete(`${BASE_URL}/datasets/${datasetId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchDatasets();
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
   };
 
   return (
@@ -122,16 +140,24 @@ export default function DatasetsPage() {
             </p>
           </div>
         ) : (
-          datasets.map((file) => (
+          datasets.map((dataset) => (
             <div
-              key={file}
+              key={dataset.id}
               className="flex justify-between items-center p-4 bg-white rounded-xl shadow-sm border"
             >
-              <span className="font-medium text-zinc-800">{file}</span>
+              <div>
+                <span className="font-medium text-zinc-800">
+                  {dataset.name}
+                </span>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Format: {dataset.format} | Created:{" "}
+                  {new Date(dataset.created_at).toLocaleString()}
+                </p>
+              </div>
 
               <div className="flex gap-3 items-center">
                 <button
-                  onClick={() => fetchCSV(file)}
+                  onClick={() => fetchCSV(dataset)}
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition"
                 >
                   <Eye size={16} />
@@ -139,7 +165,7 @@ export default function DatasetsPage() {
                 </button>
 
                 <button
-                  onClick={() => openFullScreen(file)}
+                  onClick={() => openFullScreen(dataset)}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition"
                 >
                   <ExternalLink size={16} />
@@ -147,7 +173,7 @@ export default function DatasetsPage() {
                 </button>
 
                 <button
-                  onClick={() => deleteDataset(file)}
+                  onClick={() => deleteDataset(dataset.id)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition"
                 >
                   <Trash2 size={16} />
