@@ -87,6 +87,9 @@ def nl_sql_dataset(
             dataset_repo=dataset_repo,
             storage=storage_service,
         )
+    except ValueError as e:
+        logger.warning("NL-SQL schema validation failed: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("NL-SQL generation failed: %s", e)
         raise HTTPException(status_code=500, detail="Dataset generation failed")

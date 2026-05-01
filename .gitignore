@@ -2,6 +2,7 @@
 # Python
 # ========================
 __pycache__/
+generators/_pycache__/
 *.py[cod]
 *$py.class
 *.so

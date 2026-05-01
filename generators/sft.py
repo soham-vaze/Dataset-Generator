@@ -127,12 +127,7 @@ Format:
 
             valid_count = 0
 
-            if isinstance(data, list):
-                pairs = data
-            else:
-                pairs = data.get("pairs", [])
-
-            for item in pairs:
+            for item in data.get("pairs", []):
 
                 instruction = item.get("instruction", "").strip()
                 response = item.get("response", "").strip()

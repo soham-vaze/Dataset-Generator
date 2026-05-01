@@ -1,5 +1,31 @@
-"""Backward compatibility - use infrastructure.db.database instead."""
+from typing import Generator
 
-from infrastructure.db.database import Base, SessionLocal, engine, get_db
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-__all__ = ["Base", "SessionLocal", "engine", "get_db"]
+from config import settings
+
+engine = create_engine(
+    settings.database_url,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
