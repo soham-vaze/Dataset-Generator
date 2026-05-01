@@ -71,7 +71,8 @@ Ensure balanced labels.
 
             data = extract_json(raw_output)
 
-            df = pd.DataFrame(data["samples"])
+            samples = data if isinstance(data, list) else data["samples"]
+            df = pd.DataFrame(samples)
 
         except ModelNotFoundError:
             raise
