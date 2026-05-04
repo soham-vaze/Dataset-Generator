@@ -129,7 +129,7 @@ def generate_rag_qa(
 
 def generate_classification(
     task_description: str,
-    class_labels: list,
+    class_labels: list[str],
     output_name: str,
     model: str,
     num_samples: int,

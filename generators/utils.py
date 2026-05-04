@@ -12,6 +12,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Module-level API URL — set at app startup via configure().
+_api_url: str = "http://localhost:11434/api/generate"
+
+
+def configure(api_url: str) -> None:
+    """Set the LLM API URL. Called once during application startup."""
+    global _api_url
+    _api_url = api_url
+
 
 class ModelNotFoundError(Exception):
     """Raised when the requested model is not available in Ollama."""
@@ -19,8 +28,8 @@ class ModelNotFoundError(Exception):
 
 
 def get_api_url() -> str:
-    """Return the Ollama API URL from environment or default."""
-    return os.environ.get("OLLAMA_API_URL", "http://localhost:11434/api/generate")
+    """Return the configured Ollama API URL."""
+    return _api_url
 
 
 def call_model(

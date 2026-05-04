@@ -1,5 +1,4 @@
-from typing import List, Optional, Tuple
-from pathlib import Path
+from typing import List, Optional
 from uuid import UUID
 
 from app.services.storage_service import StorageService

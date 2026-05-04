@@ -6,7 +6,7 @@ from typing import Dict, List, Set
 
 import pandas as pd
 
-from generators.utils import call_model, extract_json, normalize_text, save_dataset
+from generators.utils import ModelNotFoundError, call_model, extract_json, normalize_text, save_dataset
 
 logger = logging.getLogger(__name__)
 

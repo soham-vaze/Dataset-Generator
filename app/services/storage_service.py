@@ -11,10 +11,13 @@ class StorageService:
     """Manages file storage paths and temporary file operations."""
 
     def __init__(self, base_dir: str):
-        self._base_dir = Path(base_dir)
+        self._base_dir = Path(base_dir).resolve()
 
     def get_storage_path(self, storage_key: str) -> Path:
-        return self._base_dir / storage_key
+        resolved = (self._base_dir / storage_key).resolve()
+        if not resolved.is_relative_to(self._base_dir):
+            raise ValueError("Invalid storage key: path traversal detected")
+        return resolved
 
     def create_dataset_context(self, dataset_type: str) -> Tuple[UUID, str, Path]:
         dataset_id = uuid.uuid4()

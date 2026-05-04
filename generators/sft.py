@@ -1,6 +1,5 @@
 import logging
 import os
-import random
 from datetime import datetime, timezone
 from typing import Dict, List, Set
 
@@ -114,7 +113,7 @@ Format:
                 response_text = call_model(
                     prompt=prompt,
                     model=model,
-                    temperature=random.uniform(0.6, 0.9),
+                    temperature=temperature,
                 )
 
                 data = extract_json(response_text)

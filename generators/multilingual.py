@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from argostranslate import package, translate
 
-from generators.utils import call_model, save_dataframe
+from generators.utils import ModelNotFoundError, call_model, save_dataframe
 
 logger = logging.getLogger(__name__)
 

@@ -19,11 +19,77 @@ logger = logging.getLogger(__name__)
 # ======================================================
 
 def load_schema(schema_path: str) -> Dict[str, List[Dict[str, str]]]:
-    with open(schema_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with open(schema_path, "r", encoding="utf-8-sig") as f:
+        schema = json.load(f)
+
+    # Handle top-level list
+    if isinstance(schema, list):
+        schema = {"tables": schema}
+
+    if "tables" not in schema:
+        raise ValueError("Schema must contain 'tables' key")
+
+    tables = schema["tables"]
+
+    # 🔥 Convert dict → list
+    if isinstance(tables, dict):
+        logger.warning("Schema 'tables' is a dict — converting to list format")
+
+        new_tables = []
+        for table_name, table_data in tables.items():
+
+            # If list → columns
+            if isinstance(table_data, list):
+                new_tables.append({
+                    "table_name": table_name,
+                    "columns": table_data
+                })
+
+            # If dict → already structured
+            elif isinstance(table_data, dict):
+                new_tables.append({
+                    "table_name": table_name,
+                    **table_data
+                })
+
+            else:
+                raise ValueError(f"Invalid format for table '{table_name}'")
+
+        tables = new_tables
+        schema["tables"] = tables
+
+    # 🔥 Normalize columns
+    for table in tables:
+
+        if "table_name" not in table or "columns" not in table:
+            raise ValueError("Each table must have 'table_name' and 'columns'")
+
+        fixed_columns = []
+
+        for col in table["columns"]:
+
+            # Already correct
+            if isinstance(col, dict):
+                if "name" not in col or "type" not in col:
+                    raise ValueError(f"Invalid column format in {table['table_name']}")
+                fixed_columns.append(col)
+
+            # 🔥 Convert string → dict
+            elif isinstance(col, str):
+                fixed_columns.append({
+                    "name": col,
+                    "type": "INTEGER" if col.endswith("id") else "TEXT"
+                })
+
+            else:
+                raise ValueError(f"Invalid column type in {table['table_name']}")
+
+        table["columns"] = fixed_columns
+
+    return schema
 
 
-def json_to_sqlite_ddl(schema: Dict[str, List[Dict[str, str]]]) -> Tuple[List[str], Dict[str, List[str]]]:
+def json_to_sqlite_ddl(schema: Dict[str, List[Dict[str, str]]]):
 
     ddl_statements = []
     column_map = {}
@@ -31,24 +97,30 @@ def json_to_sqlite_ddl(schema: Dict[str, List[Dict[str, str]]]) -> Tuple[List[st
     for table in schema["tables"]:
 
         table_name = table["table_name"]
-
         column_defs = []
-
         column_map[table_name] = []
 
         for col in table["columns"]:
 
-            col_def = f"{col['name']} {col['type']}"
+            # 🔥 SAFETY (extra protection)
+            if isinstance(col, str):
+                col = {"name": col, "type": "TEXT"}
+
+            if not isinstance(col, dict):
+                raise ValueError(f"Invalid column in table '{table_name}'")
+
+            col_name = col["name"]
+            col_type = col["type"]
+
+            col_def = f"{col_name} {col_type}"
 
             if col.get("primary_key"):
                 col_def += " PRIMARY KEY"
 
             column_defs.append(col_def)
-
-            column_map[table_name].append(col["name"])
+            column_map[table_name].append(col_name)
 
         ddl = f"CREATE TABLE {table_name} ({', '.join(column_defs)});"
-
         ddl_statements.append(ddl)
 
     return ddl_statements, column_map
@@ -265,11 +337,12 @@ def generate_nl2sql_dataset(schema_path: str,
 
         save_dataset(dataset_rows, output_path)
 
-        print(f"\n🎯 Saved {len(dataset_rows)} unique pairs.")
+        logger.info("Saved %d unique pairs.", len(dataset_rows))
+        
 
     else:
 
-        print("\n❌ No valid unique pairs generated.")
+        logger.warning("No valid unique pairs generated.")
 
 
 # ======================================================

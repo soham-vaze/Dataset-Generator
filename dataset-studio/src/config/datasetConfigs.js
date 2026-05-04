@@ -34,7 +34,7 @@ export const datasetConfigs = {
     fields: [
       { name: "topic", label: "Topic", type: "text" },
       { name: "model", label: "Model", type: "select",
-        options: ["mistral:7b-instruct-q4_K_M","phi3:instruct","qwen2.5:3b-instruct","gemma3:1b"]
+        options: ["llama3.1:8b","gemma3:4b","qwen2.5:7b","gemma3:1b"]
        },
       {
         name: "style",
@@ -58,7 +58,7 @@ export const datasetConfigs = {
     fields: [
       { name: "schema_file", label: "Schema File (.json)", type: "file" },
       { name: "model", label: "Model", type: "select",
-        options: ["mistral:7b-instruct-q4_K_M","phi3:instruct","qwen2.5:3b-instruct","gemma3:1b"]
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
        },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "output_name", label: "Output Name", type: "text" },
@@ -74,7 +74,7 @@ export const datasetConfigs = {
     fields: [
       { name: "context_file", label: "Context File (.txt / .pdf)", type: "file" },
       { name: "model", label: "Model", type: "select",
-        options: ["mistral:7b-instruct-q4_K_M","phi3:instruct","qwen2.5:3b-instruct","gemma3:1b"]
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
        },
       {
         name: "difficulty",
@@ -100,7 +100,7 @@ export const datasetConfigs = {
         type: "textarea",
       },
       { name: "model", label: "Model", type: "select",
-        options: ["mistral:7b-instruct-q4_K_M","phi3:instruct","qwen2.5:3b-instruct","gemma3:1b"]
+        options: ["llama3.1:8b","gemma3:4b","qwen2.5:7b","gemma3:1b"]
        },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "output_name", label: "Output Name", type: "text" },
@@ -121,7 +121,7 @@ export const datasetConfigs = {
         type: "text",
       },
       { name: "model", label: "Model", type: "select",
-        options: ["mistral:7b-instruct-q4_K_M","phi3:instruct","qwen2.5:3b-instruct","gemma3:1b"]
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
        },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "temperature", label: "Temperature", type: "number", step: "0.1" },
@@ -150,7 +150,7 @@ export const datasetConfigs = {
         options: [], // Leave empty, Dashboard will populate this
       },
       { name: "model", label: "Generation Model", type: "select",
-        options: ["mistral:7b-instruct-q4_K_M","phi3:instruct","qwen2.5:3b-instruct","gemma3:1b"]
+        options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
        },
       { name: "num_samples", label: "Number of Samples", type: "number" },
       { name: "temperature", label: "Temperature", type: "number", step: "0.1" },
