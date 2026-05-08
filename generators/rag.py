@@ -17,26 +17,32 @@ try:
 except LookupError:
     nltk.download("punkt", quiet=True)
 
-try:
-    nltk.data.find("tokenizers/punkt_tab")
-except LookupError:
-    nltk.download("punkt_tab", quiet=True)
-
 from nltk.tokenize import sent_tokenize
 
 logger = logging.getLogger(__name__)
 
 # =====================================================
+# GLOBAL EMBEDDING CACHE
+# =====================================================
+
+EMBEDDING_CACHE = {}
+
+# =====================================================
 # 1️⃣ CHUNKING
 # =====================================================
 
-def chunk_text(text: str,
-               sentences_per_chunk: int = 6,
-               overlap: int = 2) -> List[str]:
+def chunk_text(
+    text: str,
+    sentences_per_chunk: int = 5,
+    overlap: int = 2
+) -> List[str]:
 
     logger.info("Chunking text")
 
     sentences = sent_tokenize(text)
+
+    if not sentences:
+        return []
 
     chunks = []
     start = 0
@@ -46,12 +52,18 @@ def chunk_text(text: str,
         end = start + sentences_per_chunk
         chunk_sentences = sentences[start:end]
 
-        if len(chunk_sentences) < 3:
+        # Include even small final chunk
+        if len(chunk_sentences) == 0:
             break
 
-        chunks.append(" ".join(chunk_sentences))
+        chunk = " ".join(chunk_sentences).strip()
 
-        start += sentences_per_chunk - overlap
+        if chunk:
+            chunks.append(chunk)
+
+        start += max(1, sentences_per_chunk - overlap)
+
+    logger.info("Generated %d chunks", len(chunks))
 
     return chunks
 
@@ -67,34 +79,65 @@ def build_prompt_by_difficulty(difficulty: str) -> str:
     if difficulty == "easy":
         return (
             "Generate ONE factual question whose answer is directly "
-            "stated in a single sentence from the context."
+            "present in the context."
         )
 
     elif difficulty == "medium":
         return (
-            "Generate ONE question that requires combining at least "
-            "two sentences from the context."
+            "Generate ONE reasoning question that combines "
+            "information from multiple sentences."
         )
 
     elif difficulty == "hard":
         return (
-            "Generate ONE analytical question requiring reasoning, "
-            "inference, or causal understanding from multiple parts "
-            "of the context."
+            "Generate ONE analytical or inferential question "
+            "requiring deeper reasoning from the context."
         )
 
-    else:
-        raise ValueError("Difficulty must be easy | medium | hard")
+    raise ValueError("Difficulty must be easy | medium | hard")
 
 
 # =====================================================
-# 3️⃣ BATCH QA GENERATION — uses extract_json_array from generators.utils
+# 3️⃣ SAFE JSON EXTRACTION
 # =====================================================
 
-def generate_qa_batch(contexts: List[str],
-                      model: str,
-                      difficulty: str,
-                      temperature: float = 0.7) -> List[Dict[str, Any]]:
+def safe_json_parse(raw_output: str):
+
+    raw_output = raw_output.strip()
+
+    # Remove markdown fences
+    raw_output = re.sub(r"```json|```", "", raw_output).strip()
+
+    try:
+        return extract_json_array(raw_output)
+
+    except Exception:
+
+        # Try regex extraction
+        matches = re.findall(r"\[[\s\S]*\]", raw_output)
+
+        if matches:
+
+            for match in matches:
+
+                try:
+                    return json.loads(match)
+                except Exception:
+                    continue
+
+    raise ValueError("Failed to parse JSON response")
+
+
+# =====================================================
+# 4️⃣ QA GENERATION
+# =====================================================
+
+def generate_qa_batch(
+    contexts: List[str],
+    model: str,
+    difficulty: str,
+    temperature: float = 0.5
+) -> List[Dict[str, Any]]:
 
     logger.info("Generating QA batch")
 
@@ -108,19 +151,27 @@ def generate_qa_batch(contexts: List[str],
     prompt = f"""
 You are a STRICT JSON generator.
 
+TASK:
+{instruction}
+
 Generate EXACTLY {len(contexts)} question-answer pairs.
 
-Rules:
+RULES:
 - Output ONLY valid JSON
-- NO explanations
-- NO markdown
-- NO extra text
-- Ensure valid syntax
+- No markdown
+- No explanations
+- No comments
+- No trailing commas
+- Each QA must be unique
+- Questions must NOT repeat
 
-Format:
+FORMAT:
 [
-  {{"question":"...","answer":"...","context_id":1}},
-  {{"question":"...","answer":"...","context_id":2}}
+  {{
+    "question": "...",
+    "answer": "...",
+    "context_id": 1
+  }}
 ]
 
 {joined_context}
@@ -132,30 +183,48 @@ Format:
         temperature=temperature,
     )
 
-    if not raw_output or raw_output.strip() == "":
-        raise ValueError("Empty response from model")
+    if not raw_output or not raw_output.strip():
+        raise ValueError("Empty model response")
 
-    logger.debug("Raw LLM output: %s", raw_output[:500])
+    logger.debug("Raw output: %s", raw_output[:500])
 
-    raw_output = raw_output.strip()
-    try:
-        qa_list = extract_json_array(raw_output)
-    except (json.JSONDecodeError, ValueError):
-        raw_output = re.sub(r"```json|```", "", raw_output)
-        qa_list = json.loads(raw_output)
+    qa_list = safe_json_parse(raw_output)
 
-    return qa_list
+    if not isinstance(qa_list, list):
+        raise ValueError("Model did not return a list")
+
+    validated = []
+
+    for item in qa_list:
+
+        if not isinstance(item, dict):
+            continue
+
+        question = item.get("question")
+        answer = item.get("answer")
+        context_id = item.get("context_id", 1)
+
+        if not question or not answer:
+            continue
+
+        validated.append({
+            "question": str(question).strip(),
+            "answer": str(answer).strip(),
+            "context_id": int(context_id),
+        })
+
+    return validated
 
 
 # =====================================================
-# 4️⃣ VALIDATION LAYER 1: Overlap
+# 5️⃣ VALIDATION — OVERLAP
 # =====================================================
 
-def grounding_overlap_check(answer: str,
-                            context: str,
-                            threshold: float = 0.3) -> bool:
-
-    logger.debug("Entering validation layer 1 overlap")
+def grounding_overlap_check(
+    answer: str,
+    context: str,
+    threshold: float = 0.50
+) -> bool:
 
     answer_words = set(re.findall(r"\w+", answer.lower()))
     context_words = set(re.findall(r"\w+", context.lower()))
@@ -171,98 +240,102 @@ def grounding_overlap_check(answer: str,
 
 
 # =====================================================
-# 5️⃣ VALIDATION LAYER 2: Length
+# 6️⃣ EMBEDDING CACHE
 # =====================================================
 
-def length_check(answer: str,
-                 min_chars: int = 40) -> bool:
+def get_embedding(
+    text: str,
+    embedding_model: str = "nomic-embed-text"
+):
 
-    logger.debug("Entering validation layer 2")
+    cache_key = f"{embedding_model}:{text}"
 
-    return len(answer.strip()) >= min_chars
+    if cache_key not in EMBEDDING_CACHE:
 
+        EMBEDDING_CACHE[cache_key] = ollama.embeddings(
+            model=embedding_model,
+            prompt=text
+        )["embedding"]
 
-# =====================================================
-# 6️⃣ VALIDATION LAYER 3: LLM Judge
-# =====================================================
-
-def llm_consistency_check(context: str,
-                          question: str,
-                          answer: str,
-                          model: str) -> bool:
-
-    logger.debug("Entering validation layer 3")
-
-    judge_prompt = (
-        "Given the context, question, and answer below:\n\n"
-        f"Context:\n{context}\n\n"
-        f"Question:\n{question}\n\n"
-        f"Answer:\n{answer}\n\n"
-        "Is the answer fully supported by the context and does it "
-        "correctly answer the question?\n"
-        "Reply with YES or NO only."
-    )
-
-    response = call_model(
-        prompt=judge_prompt,
-        model=model,
-        temperature=0,
-    )
-
-    verdict = response.strip().upper()
-
-    return "YES" in verdict
+    return EMBEDDING_CACHE[cache_key]
 
 
 # =====================================================
-# 7️⃣ VALIDATION LAYER 4: Embedding Similarity
+# 7️⃣ SEMANTIC VALIDATION
 # =====================================================
 
-def semantic_similarity_check(answer: str,
-                              context: str,
-                              threshold: float = 0.50,
-                              embedding_model: str = "nomic-embed-text") -> bool:
+def semantic_similarity_check(
+    question: str,
+    answer: str,
+    context: str,
+    threshold: float = 0.55,
+    embedding_model: str = "nomic-embed-text"
+) -> bool:
 
-    logger.debug("Entering validation layer 4")
+    qa_text = f"{question} {answer}"
 
-    answer_emb = ollama.embeddings(
-        model=embedding_model,
-        prompt=answer
-    )["embedding"]
-
-    context_emb = ollama.embeddings(
-        model=embedding_model,
-        prompt=context
-    )["embedding"]
+    qa_emb = get_embedding(qa_text, embedding_model)
+    context_emb = get_embedding(context, embedding_model)
 
     similarity = cosine_similarity(
-        [answer_emb],
+        [qa_emb],
         [context_emb]
     )[0][0]
 
-    logger.debug("Similarity obtained: %.4f", similarity)
+    logger.debug("Semantic similarity: %.4f", similarity)
 
     return similarity >= threshold
 
 
 # =====================================================
-# 8️⃣ SAVE DATASET — Uses shared save_dataset from generators.utils
+# 8️⃣ MAIN ENGINE
 # =====================================================
 
-
-# =====================================================
-# 9️⃣ MAIN ENGINE
-# =====================================================
-
-def generate_rag_dataset(document_text: str,
-                         output_path: str,
-                         model: str,
-                         difficulty: str = "medium",
-                         max_pairs: int = 10) -> None:
+def generate_rag_dataset(
+    document_text: str,
+    output_path: str,
+    model: str,
+    difficulty: str = "medium",
+    max_pairs: int = 10
+) -> None:
 
     logger.info("Generating RAG dataset")
 
+    word_count = len(document_text.split())
+
+    # Adaptive QA limits
+    estimated_max = max(
+        3,
+        min(max_pairs, word_count // 80)
+    )
+
+    if estimated_max < max_pairs:
+
+        logger.warning(
+            "Reducing max_pairs from %d to %d due to limited content",
+            max_pairs,
+            estimated_max
+        )
+
+        max_pairs = estimated_max
+
+    # Auto-adjust difficulty for tiny docs
+    if word_count < 300 and difficulty == "hard":
+
+        logger.warning(
+            "Document too small for hard difficulty — downgrading to medium"
+        )
+
+        difficulty = "medium"
+
     chunks = chunk_text(document_text)
+
+    if not chunks:
+
+        logger.warning("No chunks generated")
+        return
+
+    logger.info("Total Chunks: %d", len(chunks))
 
     existing_questions: Set[str] = set()
     dataset_rows: List[Dict[str, str]] = []
@@ -274,29 +347,81 @@ def generate_rag_dataset(document_text: str,
         if "question" in existing_df.columns:
 
             existing_questions = set(
-                existing_df["question"].str.lower().str.strip()
+                existing_df["question"]
+                .astype(str)
+                .str.lower()
+                .str.strip()
             )
 
-    logger.info("Total Chunks: %d", len(chunks))
+    BATCH_SIZE = min(4, len(chunks))
 
-    BATCH_SIZE = 4
+    max_attempts = max_pairs * 3
 
-    for i in range(0, len(chunks), BATCH_SIZE):
+    attempts = 0
+    stagnant_attempts = 0
 
-        if len(dataset_rows) >= max_pairs:
-            break
+    total_generated_raw = 0
+    total_duplicates = 0
+    total_failed_overlap = 0
+    total_failed_similarity = 0
+    total_errors = 0
 
-        batch_chunks = chunks[i:i + BATCH_SIZE]
+    used_chunk_sets = set()
+
+    while len(dataset_rows) < max_pairs and attempts < max_attempts:
+
+        attempts += 1
+
+        chunk_start = ((attempts - 1) * BATCH_SIZE) % len(chunks)
+
+        batch_chunks = []
+
+        for j in range(BATCH_SIZE):
+
+            idx = (chunk_start + j) % len(chunks)
+            batch_chunks.append(chunks[idx])
+
+        chunk_signature = tuple(batch_chunks)
+
+        if chunk_signature in used_chunk_sets:
+
+            stagnant_attempts += 1
+
+            if stagnant_attempts >= 5:
+
+                logger.warning(
+                    "Stopping due to repeated chunk stagnation"
+                )
+
+                break
+
+        used_chunk_sets.add(chunk_signature)
+
+        logger.info(
+            "Attempt %d/%d — using %d chunks (have %d/%d pairs)",
+            attempts,
+            max_attempts,
+            len(batch_chunks),
+            len(dataset_rows),
+            max_pairs
+        )
+
+        added_this_round = 0
 
         try:
 
             qa_list = generate_qa_batch(
                 contexts=batch_chunks,
                 model=model,
-                difficulty=difficulty
+                difficulty=difficulty,
             )
 
+            total_generated_raw += len(qa_list)
+
             for qa in qa_list:
+
+                if len(dataset_rows) >= max_pairs:
+                    break
 
                 context_id = qa.get("context_id", 1) - 1
 
@@ -308,22 +433,25 @@ def generate_rag_dataset(document_text: str,
                 question = qa["question"].strip()
                 answer = qa["answer"].strip()
 
-                normalized_question = question.lower()
+                normalized_question = question.lower().strip()
 
                 if normalized_question in existing_questions:
-                    logger.debug("Duplicate question")
+
+                    total_duplicates += 1
                     continue
 
                 if not grounding_overlap_check(answer, chunk):
-                    logger.debug("Failed overlap check")
+
+                    total_failed_overlap += 1
                     continue
 
-                # if not length_check(answer):
-                #     logger.debug("Failed length check")
-                #     continue
+                if not semantic_similarity_check(
+                    question,
+                    answer,
+                    chunk
+                ):
 
-                if not semantic_similarity_check(answer, chunk):
-                    logger.debug("Failed semantic similarity")
+                    total_failed_similarity += 1
                     continue
 
                 dataset_rows.append({
@@ -331,30 +459,85 @@ def generate_rag_dataset(document_text: str,
                     "question": question,
                     "answer": answer,
                     "difficulty": difficulty,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(
+                        timezone.utc
+                    ).isoformat(),
                 })
 
                 existing_questions.add(normalized_question)
 
-                logger.info("Added (%d/%d)", len(dataset_rows), max_pairs)
+                added_this_round += 1
+
+                logger.info(
+                    "Added (%d/%d)",
+                    len(dataset_rows),
+                    max_pairs
+                )
+
+            if added_this_round == 0:
+                stagnant_attempts += 1
+            else:
+                stagnant_attempts = 0
+
+            if stagnant_attempts >= 5:
+
+                logger.warning(
+                    "Stopping due to no new QA generation"
+                )
+
+                break
 
         except Exception as e:
 
-            logger.error("Error during QA generation: %s", e)
+            logger.error(
+                "Error during QA generation: %s",
+                e
+            )
+
+            total_errors += 1
+
+    # =====================================================
+    # SAVE
+    # =====================================================
 
     if dataset_rows:
 
         save_dataset(dataset_rows, output_path)
 
-        logger.info("Saved %d QA pairs", len(dataset_rows))
+        logger.info(
+            "Saved %d QA pairs",
+            len(dataset_rows)
+        )
 
     else:
 
         logger.warning("No valid QA pairs generated")
 
+    # =====================================================
+    # SUMMARY
+    # =====================================================
+
+    logger.info("===== RAG Generation Summary =====")
+    logger.info("Requested: %d", max_pairs)
+    logger.info("Generated (raw): %d", total_generated_raw)
+    logger.info("Valid saved: %d", len(dataset_rows))
+    logger.info("Duplicates skipped: %d", total_duplicates)
+    logger.info("Failed overlap check: %d", total_failed_overlap)
+    logger.info("Failed similarity check: %d", total_failed_similarity)
+    logger.info("Generation errors: %d", total_errors)
+    logger.info("Attempts used: %d/%d", attempts, max_attempts)
+
+    fulfillment = (
+        (len(dataset_rows) / max_pairs) * 100
+        if max_pairs > 0 else 0
+    )
+
+    logger.info("Fulfillment: %.1f%%", fulfillment)
+    logger.info("==================================")
+
 
 # =====================================================
-# 🔥 EXAMPLE USAGE
+# EXAMPLE USAGE
 # =====================================================
 
 if __name__ == "__main__":
@@ -364,16 +547,8 @@ if __name__ == "__main__":
 
     generate_rag_dataset(
         document_text=text,
-        output_path="../datasets/rag_dataset_v2.csv",
+        output_path="../datasets/rag_dataset_v3.csv",
         model="gemma3:4b",
         difficulty="medium",
-        max_pairs=8
-    )
-
-    generate_rag_dataset(
-        document_text=text,
-        output_path="../datasets/rag_dataset_v2.csv",
-        model="gemma3:4b",
-        difficulty="easy",
         max_pairs=8
     )

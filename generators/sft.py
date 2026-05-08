@@ -72,6 +72,10 @@ def generate_instruction_dataset(
 
         attempts = 0
         max_attempts = num_samples * 5
+        total_generated_raw = 0
+        total_duplicates = 0
+        total_low_quality = 0
+        total_parse_failures = 0
 
         while len(dataset_rows) < num_samples and attempts < max_attempts:
 
@@ -122,11 +126,14 @@ Format:
                 raise
             except Exception as e:
                 logger.warning("JSON parse failed: %s", e)
+                total_parse_failures += 1
                 continue
 
             valid_count = 0
 
             for item in data.get("pairs", []):
+
+                total_generated_raw += 1
 
                 instruction = item.get("instruction", "").strip()
                 response = item.get("response", "").strip()
@@ -136,11 +143,13 @@ Format:
                 # Dedup
                 if norm_inst in existing_instructions:
                     logger.debug("Duplicate skipped")
+                    total_duplicates += 1
                     continue
 
                 # Quality filter
                 if not quality_filter(instruction, response):
                     logger.debug("Low quality skipped")
+                    total_low_quality += 1
                     continue
 
                 dataset_rows.append({
@@ -172,7 +181,15 @@ Format:
         else:
             logger.warning("No valid samples for %s", model)
 
-    logger.info("TOTAL samples added: %d", total_added)
+    logger.info("===== SFT Generation Summary =====")
+    logger.info("Requested: %d", num_samples)
+    logger.info("Generated (raw): %d", total_generated_raw)
+    logger.info("Valid saved: %d", total_added)
+    logger.info("Duplicates skipped: %d", total_duplicates)
+    logger.info("Low quality skipped: %d", total_low_quality)
+    logger.info("Parse failures: %d", total_parse_failures)
+    logger.info("Fulfillment: %.1f%%", (total_added / num_samples * 100) if num_samples > 0 else 0)
+    logger.info("=================================")
 
 
 # ===============================

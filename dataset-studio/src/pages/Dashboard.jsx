@@ -22,20 +22,25 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
   // ===== NO DATASET SELECTED — SHOW CATEGORY GRID =====
   if (!config) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Hero section */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mb-12 text-center"
+          transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="mb-14 text-center"
         >
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/[0.06] border border-primary/[0.1] mb-6">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary-400 animate-pulse" />
+            <span className="text-[11px] font-semibold text-primary-300 tracking-wide uppercase">AI-Powered Generation</span>
+          </div>
+
+          <h1 className="text-4xl md:text-[3.2rem] font-extrabold tracking-[-0.03em] mb-5 leading-[1.1]">
             <span className="text-zinc-100">What would you like to </span>
             <span className="text-gradient">generate</span>
             <span className="text-zinc-100"> today?</span>
           </h1>
-          <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
+          <p className="text-zinc-500 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
             Choose a dataset type to start building production-ready training data
           </p>
         </motion.div>
@@ -53,16 +58,21 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
           ))}
         </div>
 
-        {/* Quick tips */}
+        {/* Tip */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8 }}
-          className="mt-12 text-center"
+          className="mt-14 flex justify-center"
         >
-          <p className="text-xs text-zinc-600">
-            💡 Tip: You can submit multiple generation requests simultaneously — they run in the background.
-          </p>
+          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/[0.015] border border-white/[0.04]">
+            <svg className="w-4 h-4 text-zinc-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+            </svg>
+            <p className="text-[12px] text-zinc-600">
+              You can submit multiple generation requests simultaneously — they run in the background.
+            </p>
+          </div>
         </motion.div>
       </div>
     );
@@ -128,7 +138,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
         if (ok) {
           resolveJob(jobId, true);
           addNotification(
-            `🎉 Your dataset "${datasetName}" has been successfully created!`,
+            `Your dataset "${datasetName}" has been successfully created!`,
             "success"
           );
         } else {
@@ -148,7 +158,6 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
       });
   };
 
-  // Group fields into logical steps
   const configFields = config.fields.filter((f) => f.name !== "output_name");
   const outputField = config.fields.find((f) => f.name === "output_name");
 
@@ -157,16 +166,16 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
       <AnimatePresence mode="wait">
         <motion.div
           key={selectedDataset}
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -30 }}
-          transition={{ duration: 0.4 }}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -16 }}
+          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
           {/* Back button */}
           <motion.button
             onClick={() => onSelectDataset(null)}
             whileHover={{ x: -3 }}
-            className="group flex items-center gap-2 mb-8 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="group flex items-center gap-2 mb-8 text-sm text-zinc-600 hover:text-zinc-300 transition-colors duration-200"
           >
             <svg className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -176,23 +185,31 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
 
           {/* Header with icon */}
           <div className="flex items-start gap-4 mb-8">
-            <div className={`${meta.accentColor || "text-zinc-400"} ${meta.bgAccent || "bg-white/5"} p-3 rounded-2xl`}>
+            <div className={`${meta.accentColor || "text-zinc-400"} ${meta.bgAccent || "bg-white/5"} p-3 rounded-2xl border border-white/[0.06]`}>
               <div className="w-8 h-8">
                 {meta.icon}
               </div>
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">
-                {config.label}
-              </h2>
-              <p className="text-zinc-500 mt-1 text-sm">
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-zinc-100 tracking-[-0.02em]">
+                  {config.label}
+                </h2>
+                <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] px-2.5 py-1 rounded-lg ${meta.bgAccent} ${meta.accentColor}`}>
+                  {meta.tag}
+                </span>
+              </div>
+              <p className="text-zinc-500 mt-1.5 text-sm leading-relaxed">
                 {meta.description || "Configure parameters and generate structured training datasets."}
               </p>
             </div>
           </div>
 
           {/* Form card */}
-          <GlassCard hover={false} className="p-8">
+          <GlassCard hover={false} className="p-8 relative overflow-hidden">
+            {/* Top accent */}
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+
             <div className="space-y-6">
               {/* Main fields */}
               {configFields.map((field, index) => {
@@ -208,9 +225,10 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                     key={field.name}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
+                    transition={{ delay: index * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
+                    className="space-y-2"
                   >
-                    <label className="block text-xs font-medium text-zinc-400 mb-2 tracking-wide uppercase">
+                    <label className="block text-[11px] font-semibold text-zinc-500 tracking-[0.08em] uppercase">
                       {field.label}
                     </label>
 
@@ -243,7 +261,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                       <div className="relative">
                         <input
                           type="file"
-                          className="glass-input w-full file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary/20 file:text-primary-300 hover:file:bg-primary/30 file:cursor-pointer file:transition-colors"
+                          className="glass-input w-full file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary/[0.15] file:text-primary-300 hover:file:bg-primary/[0.25] file:cursor-pointer file:transition-all"
                           onChange={(e) => handleChange(e, field)}
                         />
                       </div>
@@ -268,17 +286,20 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
 
                     {/* Helper hints */}
                     {field.name === "temperature" && (
-                      <p className="text-[11px] text-zinc-600 mt-1.5 ml-1">
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
                         Lower values (0.1-0.3) = more focused. Higher values (0.7-1.0) = more creative.
                       </p>
                     )}
                     {field.name === "num_pairs" && (
-                      <p className="text-[11px] text-zinc-600 mt-1.5 ml-1">
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
                         Recommended: 50-200 pairs for fine-tuning experiments.
                       </p>
                     )}
                     {field.name === "num_samples" && (
-                      <p className="text-[11px] text-zinc-600 mt-1.5 ml-1">
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
                         Recommended: 50-500 samples depending on your use case.
                       </p>
                     )}
@@ -287,16 +308,17 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
               })}
 
               {/* Divider */}
-              <div className="h-px bg-white/[0.04] my-2" />
+              <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
 
               {/* Output name */}
               {outputField && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: configFields.length * 0.05 }}
+                  transition={{ delay: configFields.length * 0.04 }}
+                  className="space-y-2"
                 >
-                  <label className="block text-xs font-medium text-zinc-400 mb-2 tracking-wide uppercase">
+                  <label className="block text-[11px] font-semibold text-zinc-500 tracking-[0.08em] uppercase">
                     {outputField.label}
                   </label>
                   <input
@@ -306,7 +328,8 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                     placeholder="my-dataset-v1"
                     onChange={(e) => handleChange(e, outputField)}
                   />
-                  <p className="text-[11px] text-zinc-600 mt-1.5 ml-1">
+                  <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
                     This will be used as the filename for your generated dataset.
                   </p>
                 </motion.div>
@@ -316,18 +339,23 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
               <AnimatePresence>
                 {message && (
                   <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    className={`p-4 rounded-xl text-sm border ${
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                    className={`p-4 rounded-xl text-sm border flex items-start gap-3 ${
                       message.type === "success"
-                        ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                        ? "bg-emerald-500/[0.06] text-emerald-300 border-emerald-500/[0.15]"
                         : message.type === "info"
-                        ? "bg-blue-500/10 text-blue-300 border-blue-500/20"
-                        : "bg-red-500/10 text-red-300 border-red-500/20"
+                        ? "bg-blue-500/[0.06] text-blue-300 border-blue-500/[0.15]"
+                        : "bg-red-500/[0.06] text-red-300 border-red-500/[0.15]"
                     }`}
                   >
-                    {message.text}
+                    {message.type === "info" && (
+                      <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                      </svg>
+                    )}
+                    <span>{message.text}</span>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -337,7 +365,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                 onClick={handleSubmit}
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
-                className="btn-primary w-full flex items-center justify-center gap-2"
+                className="btn-primary w-full flex items-center justify-center gap-2.5 mt-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
