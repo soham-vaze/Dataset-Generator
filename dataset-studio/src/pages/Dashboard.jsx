@@ -15,7 +15,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
   const config = datasetConfigs[selectedDataset];
   const { addNotification } = useNotification();
   const { token } = useAuth();
-  const { addJob, resolveJob } = usePendingJobs();
+  const { addJob, resolveJob, updateJobId } = usePendingJobs();
 
   const [formData, setFormData] = useState({});
   const [message, setMessage] = useState(null);
@@ -140,7 +140,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
       })
       .then(({ ok, data }) => {
         if (ok) {
-          resolveJob(jobId, true);
+          updateJobId(jobId, data.dataset_id);
           addNotification(
             `Your dataset "${datasetName}" has been successfully created!`,
             "success"

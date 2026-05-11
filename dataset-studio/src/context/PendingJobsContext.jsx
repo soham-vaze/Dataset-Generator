@@ -26,6 +26,10 @@ export const PendingJobsProvider = ({ children }) => {
     );
   }, []);
 
+  const updateJobId = useCallback((oldId, newId) => {
+    setJobs((prev) => prev.map((j) => (j.id === oldId ? { ...j, id: newId } : j)));
+  }, []);
+
   // Only jobs belonging to the currently logged-in user
   const myJobs = jobs.filter((j) => j.userEmail === userEmail);
 
@@ -49,9 +53,8 @@ export const PendingJobsProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [token, userEmail, jobs, resolveJob]);
 
-
   return (
-    <PendingJobsContext.Provider value={{ myJobs, addJob, resolveJob }}>
+    <PendingJobsContext.Provider value={{ myJobs, addJob, resolveJob, updateJobId }}>
       {children}
     </PendingJobsContext.Provider>
   );
