@@ -59,24 +59,30 @@ def generate_classification_dataset(
         logger.info("Attempt %d/%d — generating %d (have %d/%d)",
                      attempts, max_attempts, current_batch, generated_total, num_samples)
 
-        prompt = f"""
-Generate {current_batch} examples for a text classification dataset.
+        prompt = f"""You are a dataset generation engine. Generate exactly {current_batch} labeled text examples for the following classification task.
 
-Task:
+Task description:
 {task_description}
 
-Possible labels:
+Allowed labels (use ONLY these exact labels, no variations):
 {labels_str}
 
-Return ONLY valid JSON in the format:
+STRICT RULES:
+1. Each "label" value MUST be one of: {labels_str}
+2. Do NOT invent new labels or modify the given labels.
+3. Distribute examples roughly equally across all labels.
+4. Each "text" must be realistic, diverse, and relevant to the task.
+5. Do NOT repeat or paraphrase the same text.
+
+Return ONLY valid JSON in this exact format:
 
 {{
- "samples": [
-   {{"text": "...", "label": "..."}}
- ]
+  "samples": [
+    {{"text": "example text here", "label": "one_of_the_allowed_labels"}}
+  ]
 }}
 
-Ensure balanced labels.
+Output ONLY the JSON object. No explanation, no markdown, no extra text.
 """
 
         raw_output = ""

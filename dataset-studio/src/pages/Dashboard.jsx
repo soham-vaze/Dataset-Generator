@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { usePendingJobs } from "../context/PendingJobsContext";
 import CategoryCard from "../components/CategoryCard";
 import GlassCard from "../components/GlassCard";
+import TagInput from "../components/TagInput";
 import { categoryMeta } from "../components/CategoryCard";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
@@ -107,6 +108,9 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
     config.fields.forEach((field) => {
       if (field.name === "num_pairs" || field.name === "num_samples") {
         form.append(field.name, Number(formData[field.name]));
+      } else if (field.type === "tags") {
+        const tags = formData[field.name] || [];
+        form.append(field.name, tags.join(","));
       } else {
         form.append(field.name, formData[field.name]);
       }
@@ -239,6 +243,13 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                         className="glass-input w-full resize-none"
                         placeholder={`Enter ${field.label.toLowerCase()}...`}
                         onChange={(e) => handleChange(e, field)}
+                      />
+                    ) : field.type === "tags" ? (
+                      <TagInput
+                        tags={formData[field.name] || []}
+                        onChange={(newTags) =>
+                          setFormData((prev) => ({ ...prev, [field.name]: newTags }))
+                        }
                       />
                     ) : field.type === "select" ? (
                       <select

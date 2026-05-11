@@ -99,6 +99,11 @@ export const datasetConfigs = {
         label: "Task Description",
         type: "textarea",
       },
+      {
+        name: "class_labels",
+        label: "Labels",
+        type: "tags",
+      },
       { name: "model", label: "Model", type: "select",
         options: ["llama3.1:8b","gemma3:4b","qwen2.5:7b","gemma3:1b"]
        },
