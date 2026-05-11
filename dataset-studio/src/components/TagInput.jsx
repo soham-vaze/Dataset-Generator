@@ -14,17 +14,25 @@ export default function TagInput({ tags = [], onChange, maxTags = 50 }) {
   const [error, setError] = useState("");
   const inputRef = useRef(null);
 
+  // ── Shared label parser ─────────────────────────────────────────────────────
+  // Splits on commas and all newline variants, trims, drops empties.
+  const parseRaw = (raw) =>
+    raw.split(/[,\n\r]+/).map((s) => s.trim()).filter(Boolean);
+
+  // ── Validate a single candidate string ─────────────────────────────────────
+  const validateLabel = (trimmed) => {
+    if (trimmed.length > 100) return "Label too long (max 100 characters)";
+    if (!/^[a-zA-Z0-9\-_ ]+$/.test(trimmed))
+      return "Only letters, numbers, hyphens, underscores, and spaces allowed";
+    return null;
+  };
+
+  // ── Commit a single label (keyboard path) ──────────────────────────────────
   const addTag = (value) => {
     const trimmed = value.trim();
     if (!trimmed) return;
-    if (trimmed.length > 100) {
-      setError("Label too long (max 100 characters)");
-      return;
-    }
-    if (!/^[a-zA-Z0-9\-_ ]+$/.test(trimmed)) {
-      setError("Only letters, numbers, hyphens, underscores, and spaces allowed");
-      return;
-    }
+    const validationError = validateLabel(trimmed);
+    if (validationError) { setError(validationError); return; }
     if (tags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
       setError(`"${trimmed}" already added`);
       return;
@@ -37,41 +45,91 @@ export default function TagInput({ tags = [], onChange, maxTags = 50 }) {
     onChange([...tags, trimmed]);
   };
 
+  // ── Commit multiple labels in ONE onChange call (paste / auto-split path) ──
+  // Calling addTag in a forEach loop reads the same stale `tags` snapshot on
+  // every iteration — only the final call would survive. This function builds
+  // the full merged array first, then fires onChange exactly once.
+  const addTagsBatch = (candidates, currentTags = tags) => {
+    let firstError = "";
+    const accepted = [];
+    const seenLower = new Set(currentTags.map((t) => t.toLowerCase()));
+
+    for (const raw of candidates) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+
+      const validationError = validateLabel(trimmed);
+      if (validationError) { if (!firstError) firstError = validationError; continue; }
+
+      const lower = trimmed.toLowerCase();
+      if (seenLower.has(lower)) continue; // silent dedup — no error noise on bulk ops
+
+      if (currentTags.length + accepted.length >= maxTags) {
+        if (!firstError) firstError = `Maximum ${maxTags} labels allowed`;
+        break;
+      }
+
+      seenLower.add(lower);
+      accepted.push(trimmed);
+    }
+
+    if (accepted.length > 0) {
+      setError("");
+      onChange([...currentTags, ...accepted]);
+    } else if (firstError) {
+      setError(firstError);
+    }
+  };
+
   const removeTag = (index) => {
     onChange(tags.filter((_, i) => i !== index));
     setError("");
   };
 
+  // ── Keyboard handler ────────────────────────────────────────────────────────
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" || e.key === ",") {
+    if (e.key === "Enter") {
       e.preventDefault();
-      const parts = input.split(",").map((s) => s.trim()).filter(Boolean);
-      parts.forEach(addTag);
-      setInput("");
+      if (input.trim()) { addTag(input.trim()); setInput(""); }
+    } else if (e.key === ",") {
+      e.preventDefault();
+      if (input.trim()) { addTag(input.trim()); setInput(""); }
     } else if (e.key === "Backspace" && !input && tags.length > 0) {
       removeTag(tags.length - 1);
     }
   };
 
+  // ── onChange: catch commas/newlines inserted by IME / mobile keyboards ─────
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setError("");
+
+    if (value.includes(",") || value.includes("\n") || value.includes("\r")) {
+      const parts = parseRaw(value);
+      // Keep last fragment in the box (user may still be typing it)
+      const toCommit = parts.slice(0, -1);
+      const remaining = parts[parts.length - 1] ?? "";
+      if (toCommit.length > 0) addTagsBatch(toCommit);
+      setInput(remaining);
+    } else {
+      setInput(value);
+    }
+  };
+
+  // ── Paste handler ───────────────────────────────────────────────────────────
   const handlePaste = (e) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData("text");
-    const parts = pasted.split(",").map((s) => s.trim()).filter(Boolean);
-    parts.forEach(addTag);
+    // Prepend whatever is already in the box so partial prefixes are preserved
+    const parts = parseRaw(input + pasted);
+    addTagsBatch(parts);
     setInput("");
   };
 
+  // ── Suggestion pills ────────────────────────────────────────────────────────
   const applySuggestion = (suggestion) => {
-    const parts = suggestion.split(",").map((s) => s.trim()).filter(Boolean);
-    const newTags = [];
-    parts.forEach((t) => {
-      if (!tags.some((existing) => existing.toLowerCase() === t.toLowerCase()) && newTags.length + tags.length < maxTags) {
-        newTags.push(t);
-      }
-    });
-    if (newTags.length > 0) {
-      onChange([...tags, ...newTags]);
-    }
+    const parts = parseRaw(suggestion);
+    addTagsBatch(parts);
     setError("");
   };
 
@@ -117,7 +175,7 @@ export default function TagInput({ tags = [], onChange, maxTags = 50 }) {
           ref={inputRef}
           type="text"
           value={input}
-          onChange={(e) => { setInput(e.target.value); setError(""); }}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={tags.length === 0 ? "Type a label and press Enter..." : "Add more..."}
