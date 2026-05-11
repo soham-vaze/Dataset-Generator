@@ -159,8 +159,28 @@ def classification_dataset(
     current_user: UserEntity = Depends(get_current_user),
 ) -> dict:
     labels = [label.strip() for label in class_labels.split(",") if label.strip()]
-    if not labels:
-        raise HTTPException(status_code=400, detail="class_labels must contain at least one label")
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_labels = []
+    for label in labels:
+        lower = label.lower()
+        if lower not in seen:
+            seen.add(lower)
+            unique_labels.append(label)
+    labels = unique_labels
+
+    if len(labels) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 unique labels are required")
+
+    if len(labels) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 labels allowed")
+
+    for label in labels:
+        if len(label) > 100:
+            raise HTTPException(status_code=400, detail=f"Label too long (max 100 chars): '{label[:20]}...'")
+        if not all(c.isalnum() or c in "-_ " for c in label):
+            raise HTTPException(status_code=400, detail=f"Label contains invalid characters: '{label}'")
 
     try:
         dataset_id = generate_classification(
