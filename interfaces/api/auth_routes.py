@@ -58,6 +58,6 @@ def login(
 
     if not token:
         logger.warning("Failed login attempt for: %s", form_data.username)
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     return {"access_token": token, "token_type": "bearer"}
