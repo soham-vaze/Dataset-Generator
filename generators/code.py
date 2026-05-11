@@ -62,6 +62,10 @@ def generate_code_dataset(
 
     attempts = 0
     max_attempts = num_samples * 5
+    total_generated_raw = 0
+    total_duplicates = 0
+    total_low_quality = 0
+    total_parse_failures = 0
 
     while len(dataset_rows) < num_samples and attempts < max_attempts:
 
@@ -108,11 +112,14 @@ Format:
             logger.warning("JSON parse failed: %s", e)
             if response_text:
                 logger.debug("Raw response: %s", response_text[:500])
+            total_parse_failures += 1
             continue
 
         valid_count = 0
 
         for item in data.get("pairs", []):
+
+            total_generated_raw += 1
 
             instruction = item.get("instruction", "").strip()
             code = item.get("code", "").strip()
@@ -122,11 +129,13 @@ Format:
             # Dedup check
             if norm_inst in existing_instructions:
                 logger.debug("Duplicate skipped")
+                total_duplicates += 1
                 continue
 
             # Quality filter
             if not basic_quality_filter(instruction, code):
                 logger.debug("Low quality skipped")
+                total_low_quality += 1
                 continue
 
             dataset_rows.append({
@@ -154,6 +163,17 @@ Format:
         logger.info("Saved %d samples.", len(dataset_rows))
     else:
         logger.warning("No valid samples generated.")
+
+    logger.info("===== Text-to-Code Generation Summary =====")
+    logger.info("Requested: %d", num_samples)
+    logger.info("Generated (raw): %d", total_generated_raw)
+    logger.info("Valid saved: %d", len(dataset_rows))
+    logger.info("Duplicates skipped: %d", total_duplicates)
+    logger.info("Low quality skipped: %d", total_low_quality)
+    logger.info("Parse failures: %d", total_parse_failures)
+    logger.info("Attempts used: %d/%d", attempts, max_attempts)
+    logger.info("Fulfillment: %.1f%%", (len(dataset_rows) / num_samples * 100) if num_samples > 0 else 0)
+    logger.info("============================================")
 
 
 # =====================================================

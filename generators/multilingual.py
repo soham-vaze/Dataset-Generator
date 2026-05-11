@@ -1,5 +1,4 @@
 import logging
-import math
 import os
 import re
 from datetime import datetime, timezone
@@ -144,17 +143,27 @@ def generate_multilingual_dataset(
 
     # Batch logic
     batch_size = min(20, num_samples)
-    total_batches = math.ceil(num_samples / batch_size)
 
-    logger.info("Using batch size %d (%d batches)", batch_size, total_batches)
+    logger.info("Using batch size %d, target samples: %d", batch_size, num_samples)
 
     all_sentences: List[str] = []
+    existing_normalized: set = set()
+    attempts = 0
+    max_attempts = num_samples * 5
+    total_generated_raw = 0
+    total_duplicates = 0
+    total_short_filtered = 0
+    total_parse_failures = 0
 
-    for batch in range(total_batches):
+    while len(all_sentences) < num_samples and attempts < max_attempts:
 
-        current_batch = min(batch_size, num_samples - len(all_sentences))
+        attempts += 1
 
-        logger.info("Batch %d/%d — generating %d", batch + 1, total_batches, current_batch)
+        remaining = num_samples - len(all_sentences)
+        current_batch = min(batch_size, remaining)
+
+        logger.info("Attempt %d/%d — generating %d (have %d/%d)",
+                     attempts, max_attempts, current_batch, len(all_sentences), num_samples)
 
         prompt = (
             f"Generate exactly {current_batch} natural sentences about '{topic}'.\n"
@@ -171,10 +180,12 @@ def generate_multilingual_dataset(
         except Exception as e:
 
             logger.warning("Model call failed: %s", e)
+            total_parse_failures += 1
             continue
 
         if not content:
             logger.warning("Empty model response")
+            total_parse_failures += 1
             continue
 
         content = content.strip()
@@ -185,17 +196,27 @@ def generate_multilingual_dataset(
         sentences = re.split(r'\n+|(?<=[.!?])\s+', content)
         sentences = [s.strip() for s in sentences if s.strip()]
 
-        sentences = [s for s in sentences if len(s.split()) > 3]
+        total_generated_raw += len(sentences)
 
-        sentences = sentences[:current_batch]
+        for s in sentences:
+            if len(all_sentences) >= num_samples:
+                break
 
-        logger.debug("Parsed %d sentences", len(sentences))
+            # Filter short sentences
+            if len(s.split()) <= 3:
+                total_short_filtered += 1
+                continue
 
-        all_sentences.extend(sentences)
+            # Dedup check
+            norm = " ".join(s.lower().split())
+            if norm in existing_normalized:
+                total_duplicates += 1
+                continue
 
-        if len(all_sentences) >= num_samples:
-            break
+            existing_normalized.add(norm)
+            all_sentences.append(s)
 
+        logger.debug("Parsed %d valid sentences this attempt", len(sentences))
 
     sentences = all_sentences[:num_samples]
 
@@ -231,7 +252,16 @@ def generate_multilingual_dataset(
 
     save_dataframe(df, output_path)
 
-    logger.info("Saved %d multilingual pairs using Argos Translate.", len(df))
+    logger.info("===== Multilingual Generation Summary =====")
+    logger.info("Requested: %d", num_samples)
+    logger.info("Generated (raw): %d", total_generated_raw)
+    logger.info("Valid saved: %d", len(pairs))
+    logger.info("Duplicates skipped: %d", total_duplicates)
+    logger.info("Short sentences filtered: %d", total_short_filtered)
+    logger.info("Parse/call failures: %d", total_parse_failures)
+    logger.info("Attempts used: %d/%d", attempts, max_attempts)
+    logger.info("Fulfillment: %.1f%%", (len(pairs) / num_samples * 100) if num_samples > 0 else 0)
+    logger.info("============================================")
 
 
 # =====================================================

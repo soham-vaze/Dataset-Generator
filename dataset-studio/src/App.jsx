@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import Dashboard from "./pages/Dashboard";
 import Datasets from "./pages/Datasets";
 import DatasetViewer from "./pages/DatasetViewer";
@@ -9,14 +10,24 @@ import Register from "./pages/Register";
 import { useAuth } from "./context/AuthContext";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
+import AnimatedBackground from "./components/AnimatedBackground";
 
-function AppLayout({ children, onSelectDataset }) {
+function AppLayout({ children, onSelectDataset, selectedDataset }) {
   return (
-    <div className="flex min-h-screen bg-zinc-50">
-      <Sidebar onSelectDataset={onSelectDataset} />
-      <div className="flex-1 flex flex-col">
+    <div className="flex min-h-screen bg-dark relative overflow-hidden">
+      <AnimatedBackground />
+      <div className="dot-grid fixed inset-0 z-0 pointer-events-none opacity-30" />
+      <Sidebar onSelectDataset={onSelectDataset} selectedDataset={selectedDataset} />
+      <div className="flex-1 flex flex-col relative z-10 min-w-0">
         <Header />
-        <div className="flex-1 overflow-y-auto p-8">{children}</div>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="flex-1 overflow-y-auto p-6 md:p-8"
+        >
+          {children}
+        </motion.div>
       </div>
     </div>
   );
@@ -44,7 +55,7 @@ function App() {
       <Route
         path="/"
         element={
-          <AppLayout onSelectDataset={setSelectedDataset}>
+          <AppLayout onSelectDataset={setSelectedDataset} selectedDataset={selectedDataset}>
             <Dashboard selectedDataset={selectedDataset} onSelectDataset={setSelectedDataset} />
           </AppLayout>
         }
@@ -52,7 +63,7 @@ function App() {
       <Route
         path="/pipeline"
         element={
-          <AppLayout onSelectDataset={setSelectedDataset}>
+          <AppLayout onSelectDataset={setSelectedDataset} selectedDataset={selectedDataset}>
             <Pipeline />
           </AppLayout>
         }
@@ -60,7 +71,7 @@ function App() {
       <Route
         path="/datasets"
         element={
-          <AppLayout onSelectDataset={setSelectedDataset}>
+          <AppLayout onSelectDataset={setSelectedDataset} selectedDataset={selectedDataset}>
             <Datasets />
           </AppLayout>
         }
