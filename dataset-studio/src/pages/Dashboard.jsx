@@ -142,7 +142,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
         if (ok) {
           updateJobId(jobId, data.dataset_id);
           addNotification(
-            `Your dataset "${datasetName}" has been successfully created!`,
+            `Dataset "${datasetName}" generation has started!`,
             "success"
           );
         } else {
