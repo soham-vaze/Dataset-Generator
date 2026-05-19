@@ -1,8 +1,10 @@
+import code
 import logging
 import math
 import os
 from datetime import datetime, timezone
 from typing import Dict, List, Set
+import re
 
 import pandas as pd
 
@@ -23,7 +25,10 @@ def basic_quality_filter(instruction: str, code: str) -> bool:
     if len(code) < 40:
         return False
 
-    if "TODO" in code or "pass" in code:
+    if "TODO" in code and not re.search(r'["\'].*TODO.*["\']', code):
+        return False
+    
+    if re.search(r'^\s*pass\s*$', code, re.MULTILINE):
         return False
 
     return True

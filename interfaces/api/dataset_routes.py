@@ -71,3 +71,16 @@ def delete_dataset_route(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     return {"message": "Dataset deleted successfully"}
+
+
+@router.get("/datasets/{dataset_id}/status")
+def get_dataset_status(
+    dataset_id: UUID,
+    dataset_repo: DatasetRepositoryInterface = Depends(get_dataset_repo),
+    current_user: UserEntity = Depends(get_current_user),
+)-> dict:
+    entity = dataset_repo.find_by_id_and_user(dataset_id, current_user.id)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    return {"dataset_id": dataset_id, "status": entity.status}

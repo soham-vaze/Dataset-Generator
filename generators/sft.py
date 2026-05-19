@@ -41,7 +41,7 @@ def quality_filter(instruction: str, response: str) -> bool:
 
 def generate_instruction_dataset(
     topic: str,
-    output_csv_path: str,
+    output_path: str,
     models: List[str],
     style: str,
     num_samples: int = 50,
@@ -55,8 +55,8 @@ def generate_instruction_dataset(
     existing_instructions: Set[str] = set()
 
     # Load existing dataset for deduplication
-    if os.path.exists(output_csv_path):
-        existing_df = pd.read_csv(output_csv_path)
+    if os.path.exists(output_path):
+        existing_df = pd.read_csv(output_path)
         if "instruction" in existing_df.columns:
             existing_instructions = set(
                 existing_df["instruction"].astype(str).apply(normalize_text)
@@ -175,7 +175,7 @@ Format:
 
         # SAVE per model
         if dataset_rows:
-            save_dataset(dataset_rows, output_csv_path)
+            save_dataset(dataset_rows, output_path)
             logger.info("Saved %d samples for %s", len(dataset_rows), model)
             total_added += len(dataset_rows)
         else:
@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
     generate_instruction_dataset(
         topic="Quantum Computing",
-        output_csv_path="/home/soham/dataset_generator/datasets/instr_response_v2.csv",
+        output_path="/home/soham/dataset_generator/datasets/instr_response_v2.csv",
         models=["gemma3:1b"],
         style="conversational",
         num_samples=50,
