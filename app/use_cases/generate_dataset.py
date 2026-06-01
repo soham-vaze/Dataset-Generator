@@ -4,12 +4,9 @@ from uuid import UUID
 
 import PyPDF2
 
-from app.services.storage_service import StorageService
 from domain.entities.dataset import DatasetEntity
 from domain.interfaces.dataset_repository import DatasetRepositoryInterface
 
-from generators.sft import generate_instruction_dataset
-from generators.nl_sql import generate_nl2sql_dataset
 from generators.rag import generate_rag_dataset
 from generators.classification import generate_classification_dataset
 from generators.code import generate_code_dataset
@@ -22,8 +19,13 @@ from generators.multilingual_ft import (
 
 logger = logging.getLogger(__name__)
 
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
 
 def extract_document_text(file_path: str, filename: str) -> str:
+    file_size = os.path.getsize(file_path)
+    if file_size > MAX_FILE_SIZE:
+        raise ValueError("File size exceeds the maximum limit of 50 MB")
     if filename.endswith(".txt"):
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
@@ -44,6 +46,7 @@ def _save_metadata(
     dataset_type: str,
     storage_key: str,
     dataset_repo: DatasetRepositoryInterface,
+    status: str = "pending",
 ) -> None:
     entity = DatasetEntity(
         id=dataset_id,
@@ -52,78 +55,50 @@ def _save_metadata(
         dataset_type=dataset_type,
         format="csv",
         storage_key=storage_key,
+        status=status,
     )
     dataset_repo.create(entity)
 
 
-def generate_sft(
-    topic: str,
-    model: str,
-    style: str,
-    num_pairs: int,
-    language: str,
-    temperature: float,
-    output_name: str,
-    user_id: UUID,
-    dataset_repo: DatasetRepositoryInterface,
-    storage: StorageService,
-) -> str:
-    dataset_id, storage_key, output_path = storage.create_dataset_context("sft")
-
-    generate_instruction_dataset(
-        topic=topic,
-        output_csv_path=str(output_path),
-        models=[model],
-        style=style,
-        num_samples=num_pairs,
-        language=language,
-        temperature=temperature,
-    )
-
-    _save_metadata(dataset_id, user_id, output_name, "sft", storage_key, dataset_repo)
-    return str(dataset_id)
+def update_status(dataset_id: UUID, status: str) -> None:
+    db = SessionLocal()
+    try:
+        db.query(Dataset).filter(Dataset.id == dataset_id).update({"status": status})
+        db.commit()
+    finally:
+        db.close()
 
 
-def generate_nl_sql(
-    schema_path: str,
-    output_name: str,
-    model: str,
-    num_samples: int,
-    user_id: UUID,
-    dataset_repo: DatasetRepositoryInterface,
-    storage: StorageService,
-) -> str:
-    dataset_id, storage_key, output_path = storage.create_dataset_context("nl_sql")
-
-    generate_nl2sql_dataset(
-        schema_path=schema_path,
-        output_path=str(output_path),
-        model=model,
-        num_samples=num_samples,
-    )
-
-    _save_metadata(dataset_id, user_id, output_name, "nl_sql", storage_key, dataset_repo)
-    return str(dataset_id)
+def run_generation_task(
+    dataset_id: UUID,
+    generator_fn: Callable[..., None],
+    generator_kwargs: dict,
+    cleanup_paths: list[str] | None = None,
+) -> None:
+    try:
+        generator_fn(**generator_kwargs)
+        update_status(dataset_id, "ready")
+    except Exception as e:
+        logger.error("Dataset generation failed for %s: %s", dataset_id, e)
+        update_status(dataset_id, "failed")
+    finally:
+        for path in (cleanup_paths or []):
+            if os.path.exists(path):
+                os.unlink(path)
 
 
-def generate_rag_qa(
+def generate_rag_qa_background(
     file_path: str,
     filename: str,
-    output_name: str,
+    output_path: str,
     model: str,
     difficulty: str,
     num_pairs: int,
-    user_id: UUID,
-    dataset_repo: DatasetRepositoryInterface,
-    storage: StorageService,
-) -> str:
+) -> None:
     document_text = extract_document_text(file_path, filename)
-
-    dataset_id, storage_key, output_path = storage.create_dataset_context("rag_qa")
-
     generate_rag_dataset(
         document_text=document_text,
-        output_path=str(output_path),
+        output_path=output_path,
         model=model,
         difficulty=difficulty,
         max_pairs=num_pairs,

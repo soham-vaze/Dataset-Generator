@@ -1,9 +1,14 @@
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
-from app.services.storage_service import StorageService
+from generators.classification import generate_classification_dataset
+from generators.code import generate_code_dataset
+from generators.multilingual import generate_multilingual_dataset
+from generators.nl_sql import generate_nl2sql_dataset
+from generators.sft import generate_instruction_dataset
+from interfaces.utils.start_generate import start_generation
 from app.use_cases.generate_dataset import (
     generate_classification,
     generate_multilingual,
@@ -29,6 +34,7 @@ router = APIRouter(prefix="/generate", tags=["generation"])
 
 @router.post("/sft", response_model=DatasetResponse)
 def sft_dataset(
+    background_tasks: BackgroundTasks,
     topic: str = Form(...),
     model: str = Form(...),
     style: str = Form(...),
@@ -39,25 +45,12 @@ def sft_dataset(
     dataset_repo: DatasetRepositoryInterface = Depends(get_dataset_repo),
     current_user: UserEntity = Depends(get_current_user),
 ) -> dict:
-    try:
-        dataset_id = generate_sft(
-            topic=topic,
-            model=model,
-            style=style,
-            num_pairs=num_pairs,
-            language=language,
-            temperature=temperature,
-            output_name=output_name,
-            user_id=current_user.id,
-            dataset_repo=dataset_repo,
-            storage=storage_service,
-        )
-    except Exception as e:
-        logger.error("SFT generation failed: %s", e)
-        raise HTTPException(status_code=500, detail="Dataset generation failed")
-
-    return {"message": "SFT dataset generated successfully", "dataset_id": dataset_id}
-
+    return start_generation(
+        background_tasks, "sft", output_name, current_user.id, dataset_repo,
+        generator_fn=generate_instruction_dataset,
+        generator_kwargs=dict(topic=topic, models=[model], style=style,
+                              num_samples=num_pairs, language=language, temperature=temperature),
+    )
 
 # =====================================================
 # 2. NL-SQL
@@ -65,6 +58,7 @@ def sft_dataset(
 
 @router.post("/nl_sql", response_model=DatasetResponse)
 def nl_sql_dataset(
+    background_tasks: BackgroundTasks,
     schema_file: UploadFile = File(...),
     output_name: str = Form(...),
     model: str = Form(...),
@@ -78,27 +72,12 @@ def nl_sql_dataset(
 
     schema_path = storage_service.save_upload_to_temp(schema_file, suffix=Path(safe_name).suffix)
 
-    try:
-        dataset_id = generate_nl_sql(
-            schema_path=schema_path,
-            output_name=output_name,
-            model=model,
-            num_samples=num_samples,
-            user_id=current_user.id,
-            dataset_repo=dataset_repo,
-            storage=storage_service,
-        )
-    except ValueError as e:
-        logger.warning("NL-SQL schema validation failed: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error("NL-SQL generation failed: %s", e)
-        raise HTTPException(status_code=500, detail="Dataset generation failed")
-    finally:
-        storage_service.cleanup_temp_file(schema_path)
-
-    return {"message": "NL-SQL dataset generated successfully", "dataset_id": dataset_id}
-
+    return start_generation(
+        background_tasks, "nl_sql", output_name, current_user.id, dataset_repo,
+        generator_fn=generate_nl2sql_dataset,
+        generator_kwargs=dict(schema_path=schema_path, model=model, num_samples=num_samples),
+        cleanup_paths=[schema_path],
+    )
 
 # =====================================================
 # 3. RAG-QA
@@ -106,6 +85,7 @@ def nl_sql_dataset(
 
 @router.post("/rag_qa", response_model=DatasetResponse)
 def rag_dataset(
+    background_tasks: BackgroundTasks,
     context_file: UploadFile = File(...),
     output_name: str = Form(...),
     model: str = Form(...),
@@ -120,30 +100,13 @@ def rag_dataset(
 
     file_path = storage_service.save_upload_to_temp(context_file, suffix=Path(safe_name).suffix)
 
-    try:
-        dataset_id = generate_rag_qa(
-            file_path=file_path,
-            filename=safe_name,
-            output_name=output_name,
-            model=model,
-            difficulty=difficulty,
-            num_pairs=num_pairs,
-            user_id=current_user.id,
-            dataset_repo=dataset_repo,
-            storage=storage_service,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("RAG generation failed: %s", e)
-        raise HTTPException(status_code=500, detail="Dataset generation failed")
-    finally:
-        storage_service.cleanup_temp_file(file_path)
-
-    return {"message": "RAG-QA dataset generated successfully", "dataset_id": dataset_id}
-
+    return start_generation(
+        background_tasks, "rag_qa", output_name, current_user.id, dataset_repo,
+        generator_fn=generate_rag_qa_background,
+        generator_kwargs=dict(file_path=file_path, filename=safe_name,
+                              model=model, difficulty=difficulty, num_pairs=num_pairs),
+        cleanup_paths=[file_path],
+    )
 
 # =====================================================
 # 4. Classification
@@ -151,6 +114,7 @@ def rag_dataset(
 
 @router.post("/classification", response_model=DatasetResponse)
 def classification_dataset(
+    background_tasks: BackgroundTasks,
     task_description: str = Form(...),
     output_name: str = Form(...),
     model: str = Form(...),
@@ -159,6 +123,7 @@ def classification_dataset(
     dataset_repo: DatasetRepositoryInterface = Depends(get_dataset_repo),
     current_user: UserEntity = Depends(get_current_user),
 ) -> dict:
+    
     labels = [label.strip() for label in class_labels.split(",") if label.strip()]
 
     # Remove duplicates while preserving order
@@ -183,22 +148,12 @@ def classification_dataset(
         if not all(c.isalnum() or c in "-_ " for c in label):
             raise HTTPException(status_code=400, detail=f"Label contains invalid characters: '{label}'")
 
-    try:
-        dataset_id = generate_classification(
-            task_description=task_description,
-            class_labels=labels,
-            output_name=output_name,
-            model=model,
-            num_samples=num_samples,
-            user_id=current_user.id,
-            dataset_repo=dataset_repo,
-            storage=storage_service,
-        )
-    except Exception as e:
-        logger.error("Classification generation failed: %s", e)
-        raise HTTPException(status_code=500, detail="Dataset generation failed")
-
-    return {"message": "Classification dataset generated successfully", "dataset_id": dataset_id}
+    return start_generation(
+        background_tasks, "classification", output_name, current_user.id, dataset_repo,
+        generator_fn=generate_classification_dataset,
+        generator_kwargs=dict(task_description=task_description, class_labels=labels,
+                              model=model, num_samples=num_samples)
+    )
 
 
 # =====================================================
@@ -207,6 +162,7 @@ def classification_dataset(
 
 @router.post("/text_to_code", response_model=DatasetResponse)
 def text_to_code_dataset(
+    background_tasks: BackgroundTasks,
     domain: str = Form(...),
     programming_language: str = Form(...),
     output_name: str = Form(...),
@@ -216,23 +172,12 @@ def text_to_code_dataset(
     dataset_repo: DatasetRepositoryInterface = Depends(get_dataset_repo),
     current_user: UserEntity = Depends(get_current_user),
 ) -> dict:
-    try:
-        dataset_id = generate_text_to_code(
-            domain=domain,
-            programming_language=programming_language,
-            output_name=output_name,
-            model=model,
-            num_samples=num_samples,
-            temperature=temperature,
-            user_id=current_user.id,
-            dataset_repo=dataset_repo,
-            storage=storage_service,
-        )
-    except Exception as e:
-        logger.error("Text-to-Code generation failed: %s", e)
-        raise HTTPException(status_code=500, detail="Dataset generation failed")
-
-    return {"message": "Text-to-Code dataset generated successfully", "dataset_id": dataset_id}
+    return start_generation(
+        background_tasks, "text_to_code", output_name, current_user.id, dataset_repo,
+        generator_fn=generate_code_dataset,
+        generator_kwargs=dict(domain=domain, programming_language=programming_language,
+                              model=model, num_samples=num_samples, temperature=temperature),
+    )
 
 
 # =====================================================
@@ -241,6 +186,7 @@ def text_to_code_dataset(
 
 @router.post("/multilingual", response_model=DatasetResponse)
 def multilingual_dataset(
+    background_tasks: BackgroundTasks,
     topic: str = Form(...),
     source_language: str = Form(...),
     destination_language: str = Form(...),
