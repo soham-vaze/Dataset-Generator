@@ -10,13 +10,9 @@ from generators.nl_sql import generate_nl2sql_dataset
 from generators.sft import generate_instruction_dataset
 from interfaces.utils.start_generate import start_generation
 from app.use_cases.generate_dataset import (
-    generate_classification,
     generate_multilingual,
     generate_multilingual_ft,
-    generate_nl_sql,
-    generate_rag_qa,
-    generate_sft,
-    generate_text_to_code,
+    generate_rag_qa_background,
 )
 from domain.entities.user import UserEntity
 from domain.interfaces.dataset_repository import DatasetRepositoryInterface
