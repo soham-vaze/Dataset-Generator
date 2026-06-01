@@ -7,6 +7,7 @@ from app.services.storage_service import StorageService
 from app.use_cases.generate_dataset import (
     generate_classification,
     generate_multilingual,
+    generate_multilingual_ft,
     generate_nl_sql,
     generate_rag_qa,
     generate_sft,
@@ -250,11 +251,27 @@ def multilingual_dataset(
     dataset_repo: DatasetRepositoryInterface = Depends(get_dataset_repo),
     current_user: UserEntity = Depends(get_current_user),
 ) -> dict:
+    # Parse and deduplicate the comma-separated target languages sent by the client.
+    raw_languages = [lang.strip().lower() for lang in destination_language.split(",") if lang.strip()]
+
+    seen: set = set()
+    destination_languages: list = []
+    for lang in raw_languages:
+        if lang not in seen:
+            seen.add(lang)
+            destination_languages.append(lang)
+
+    if not destination_languages:
+        raise HTTPException(status_code=400, detail="At least one target language must be specified")
+
+    if len(destination_languages) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 target languages allowed per request")
+
     try:
         dataset_id = generate_multilingual(
             topic=topic,
             source_language=source_language,
-            destination_language=destination_language,
+            destination_languages=destination_languages,
             output_name=output_name,
             model=model,
             temperature=temperature,
@@ -263,8 +280,53 @@ def multilingual_dataset(
             dataset_repo=dataset_repo,
             storage=storage_service,
         )
+    except ValueError as e:
+        logger.warning("Multilingual validation error: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Multilingual generation failed: %s", e)
         raise HTTPException(status_code=500, detail="Dataset generation failed")
 
     return {"message": "Multilingual dataset generated successfully", "dataset_id": dataset_id}
+
+
+# =====================================================
+# 7. Multilingual Fine-Tuning
+# =====================================================
+
+@router.post("/multilingual_ft", response_model=DatasetResponse)
+def multilingual_ft_dataset(
+    training_pairs: str = Form(...),
+    zero_shot_pairs: str = Form(""),
+    domains: str = Form(""),
+    num_samples_per_pair: int = Form(...),
+    model: str = Form(...),
+    temperature: float = Form(...),
+    output_name: str = Form(...),
+    dataset_repo: DatasetRepositoryInterface = Depends(get_dataset_repo),
+    current_user: UserEntity = Depends(get_current_user),
+) -> dict:
+    if not training_pairs.strip():
+        raise HTTPException(status_code=400, detail="At least one training pair is required")
+
+    try:
+        dataset_id = generate_multilingual_ft(
+            training_pairs=training_pairs,
+            zero_shot_pairs=zero_shot_pairs,
+            domains=domains,
+            num_samples_per_pair=num_samples_per_pair,
+            model=model,
+            temperature=temperature,
+            output_name=output_name,
+            user_id=current_user.id,
+            dataset_repo=dataset_repo,
+            storage=storage_service,
+        )
+    except ValueError as e:
+        logger.warning("Multilingual FT validation error: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Multilingual FT generation failed: %s", e)
+        raise HTTPException(status_code=500, detail="Dataset generation failed")
+
+    return {"message": "Multilingual fine-tuning dataset generated successfully", "dataset_id": dataset_id}

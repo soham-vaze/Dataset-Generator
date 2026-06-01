@@ -1,4 +1,5 @@
 import logging
+from typing import List, Union
 from uuid import UUID
 
 import PyPDF2
@@ -13,6 +14,11 @@ from generators.rag import generate_rag_dataset
 from generators.classification import generate_classification_dataset
 from generators.code import generate_code_dataset
 from generators.multilingual import generate_multilingual_dataset
+from generators.multilingual_ft import (
+    generate_multilingual_ft_dataset,
+    parse_language_pairs,
+    DEFAULT_DOMAINS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +186,7 @@ def generate_text_to_code(
 def generate_multilingual(
     topic: str,
     source_language: str,
-    destination_language: str,
+    destination_languages: Union[str, List[str]],
     output_name: str,
     model: str,
     temperature: float,
@@ -194,7 +200,7 @@ def generate_multilingual(
     generate_multilingual_dataset(
         topic=topic,
         source_language=source_language,
-        target_language=destination_language,
+        target_languages=destination_languages,
         output_path=str(output_path),
         model=model,
         num_samples=num_samples,
@@ -202,4 +208,40 @@ def generate_multilingual(
     )
 
     _save_metadata(dataset_id, user_id, output_name, "multilingual", storage_key, dataset_repo)
+    return str(dataset_id)
+
+
+def generate_multilingual_ft(
+    training_pairs: str,
+    zero_shot_pairs: str,
+    domains: str,
+    num_samples_per_pair: int,
+    model: str,
+    temperature: float,
+    output_name: str,
+    user_id: UUID,
+    dataset_repo: DatasetRepositoryInterface,
+    storage: StorageService,
+) -> str:
+    dataset_id, storage_key, output_path = storage.create_dataset_context("multilingual_ft")
+
+    parsed_training = parse_language_pairs(training_pairs)
+    parsed_zero_shot = parse_language_pairs(zero_shot_pairs) if zero_shot_pairs.strip() else []
+    parsed_domains = (
+        [d.strip() for d in domains.split(",") if d.strip()]
+        if domains.strip()
+        else list(DEFAULT_DOMAINS)
+    )
+
+    generate_multilingual_ft_dataset(
+        training_pairs=parsed_training,
+        zero_shot_pairs=parsed_zero_shot,
+        domains=parsed_domains,
+        output_path=str(output_path),
+        model=model,
+        num_samples_per_pair=num_samples_per_pair,
+        temperature=temperature,
+    )
+
+    _save_metadata(dataset_id, user_id, output_name, "multilingual_ft", storage_key, dataset_repo)
     return str(dataset_id)

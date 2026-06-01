@@ -19,6 +19,7 @@ const datasetTypes = [
   { value: "classification", label: "Classification", accent: "text-amber-400", bg: "bg-amber-500/[0.08]", border: "border-amber-500/20", activeBg: "from-amber-500/20 to-orange-500/10" },
   { value: "text_to_code", label: "Code", accent: "text-emerald-400", bg: "bg-emerald-500/[0.08]", border: "border-emerald-500/20", activeBg: "from-emerald-500/20 to-green-500/10" },
   { value: "multilingual", label: "Multilingual", accent: "text-pink-400", bg: "bg-pink-500/[0.08]", border: "border-pink-500/20", activeBg: "from-pink-500/20 to-rose-500/10" },
+  { value: "multilingual_ft", label: "Multilingual FT", accent: "text-fuchsia-400", bg: "bg-fuchsia-500/[0.08]", border: "border-fuchsia-500/20", activeBg: "from-fuchsia-500/20 to-purple-500/10" },
 ];
 
 export default function DatasetsPage() {

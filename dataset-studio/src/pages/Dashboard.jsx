@@ -90,7 +90,8 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
       setFormData((prev) => ({
         ...prev,
         [field.name]: value,
-        destination_language: "",
+        // Reset target language selection whenever source changes
+        destination_language: [],
       }));
     } else {
       setFormData((prev) => ({
@@ -106,13 +107,17 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
     const jobId = crypto.randomUUID();
 
     config.fields.forEach((field) => {
-      if (field.name === "num_pairs" || field.name === "num_samples") {
+      if (field.name === "num_pairs" || field.name === "num_samples" || field.name === "num_samples_per_pair") {
         form.append(field.name, Number(formData[field.name]));
       } else if (field.type === "tags") {
         const tags = formData[field.name] || [];
         form.append(field.name, tags.join(","));
+      } else if (field.type === "multiselect") {
+        // Serialize selected languages as a comma-separated string
+        const selected = formData[field.name] || [];
+        form.append(field.name, selected.join(","));
       } else {
-        form.append(field.name, formData[field.name]);
+        form.append(field.name, formData[field.name] ?? "");
       }
     });
 
@@ -223,6 +228,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                   const selectedSource = formData["source_language"];
                   currentOptions = selectedSource ? (languageMapping[selectedSource] || []) : [];
                 }
+                // For multiselect, currentOptions is already set above (same logic)
 
                 return (
                   <motion.div
@@ -241,7 +247,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                         rows="4"
                         value={formData[field.name] || ""}
                         className="glass-input w-full resize-none"
-                        placeholder={`Enter ${field.label.toLowerCase()}...`}
+                        placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
                         onChange={(e) => handleChange(e, field)}
                       />
                     ) : field.type === "tags" ? (
@@ -251,6 +257,57 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                           setFormData((prev) => ({ ...prev, [field.name]: newTags }))
                         }
                       />
+                    ) : field.type === "multiselect" ? (
+                      // Multi-select rendered as a scrollable checkbox list
+                      <div>
+                        {!formData["source_language"] ? (
+                          <div className="glass-input w-full py-3 px-4 text-sm text-zinc-500">
+                            Select source language first
+                          </div>
+                        ) : currentOptions.length === 0 ? (
+                          <div className="glass-input w-full py-3 px-4 text-sm text-zinc-500">
+                            No target languages available for this source
+                          </div>
+                        ) : (
+                          <div className="glass-input w-full max-h-52 overflow-y-auto p-2 space-y-0.5">
+                            {currentOptions.map((opt) => {
+                              const selected = (formData[field.name] || []).includes(opt);
+                              return (
+                                <label
+                                  key={opt}
+                                  className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors duration-150 ${
+                                    selected
+                                      ? "bg-primary/[0.12] text-zinc-200"
+                                      : "hover:bg-white/[0.04] text-zinc-400"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => {
+                                      const current = formData[field.name] || [];
+                                      const updated = current.includes(opt)
+                                        ? current.filter((l) => l !== opt)
+                                        : [...current, opt];
+                                      setFormData((prev) => ({ ...prev, [field.name]: updated }));
+                                    }}
+                                    className="accent-violet-500 w-3.5 h-3.5 shrink-0"
+                                  />
+                                  <span className="text-sm">{opt}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {/* Show selected count badge */}
+                        {(formData[field.name] || []).length > 0 && (
+                          <p className="text-[11px] text-zinc-500 mt-1.5 flex items-center gap-1">
+                            <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                            {(formData[field.name] || []).length} language{(formData[field.name] || []).length !== 1 ? "s" : ""} selected:{" "}
+                            {(formData[field.name] || []).join(", ")}
+                          </p>
+                        )}
+                      </div>
                     ) : field.type === "select" ? (
                       <select
                         className="glass-select w-full"
@@ -258,9 +315,7 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                         onChange={(e) => handleChange(e, field)}
                       >
                         <option value="">
-                          {field.name === "destination_language" && !formData["source_language"]
-                            ? "Select source language first"
-                            : `Select ${field.label.toLowerCase()}`}
+                          {`Select ${field.label.toLowerCase()}`}
                         </option>
                         {currentOptions.map((opt) => (
                           <option key={opt} value={opt}>
@@ -313,6 +368,31 @@ export default function Dashboard({ selectedDataset, onSelectDataset }) {
                         <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
                         Recommended: 50-500 samples depending on your use case.
                       </p>
+                    )}
+                    {field.name === "training_pairs" && (
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+                        Format: Source-Target pairs separated by commas. E.g. English-Hindi, Hindi-English
+                      </p>
+                    )}
+                    {field.name === "zero_shot_pairs" && (
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+                        Evaluation-only pairs that never appear in training. Used to test cross-lingual transfer.
+                      </p>
+                    )}
+                    {field.name === "domains" && (
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+                        Add domains like: daily conversation, navigation, weather, reminders. Leave empty for defaults.
+                      </p>
+                    )}
+                    {field.name === "num_samples_per_pair" && (
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+                        Number of translation samples per language direction. Recommended: 50-200.
+                      </p>
+                    )}
                     )}
                   </motion.div>
                 );

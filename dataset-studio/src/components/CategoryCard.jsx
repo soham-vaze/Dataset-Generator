@@ -101,6 +101,23 @@ const categoryMeta = {
     bgAccent: "bg-pink-500/10",
     tag: "Multilingual",
   },
+  multilingual_ft: {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20" strokeLinecap="round" />
+        <path d="M8 5l2 6-2 6M16 5l-2 6 2 6" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+        <path d="M6 9h12M6 15h12" strokeLinecap="round" opacity="0.4" />
+      </svg>
+    ),
+    gradient: "from-indigo-500/20 via-blue-500/10 to-violet-500/5",
+    glow: "group-hover:shadow-[0_8px_50px_rgba(99,102,241,0.15)]",
+    accentColor: "text-indigo-400",
+    accentHex: "#6366f1",
+    description: "Generate instruction-based translation datasets for LoRA/QLoRA fine-tuning",
+    bgAccent: "bg-indigo-500/10",
+    tag: "Fine-Tuning",
+  },
 };
 
 export { categoryMeta };

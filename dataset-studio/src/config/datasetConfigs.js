@@ -4,9 +4,9 @@ const supportedLanguages = [
   "Dutch", "English", "Esperanto", "Estonian", "Finnish", "French", 
   "Galician", "German", "Greek", "Hebrew", "Hindi", "Hungarian", 
   "Indonesian", "Irish", "Italian", "Japanese", "Korean", "Kyrgyz", 
-  "Latvian", "Lithuanian", "Malay", "Norwegian", "Persian", "Polish", 
-  "Portuguese", "Portuguese (Brazil)", "Romanian", "Russian", "Slovak", 
-  "Slovenian", "Spanish", "Swedish", "Tagalog", "Thai", "Turkish", 
+  "Lithuanian", "Malay", "Marathi", "Norwegian", "Persian", "Polish",
+  "Portuguese", "Portuguese (Brazil)", "Punjabi", "Romanian", "Russian", "Slovak",
+  "Slovenian", "Spanish", "Swedish", "Tagalog", "Thai", "Turkish",
   "Ukrainian", "Urdu", "Vietnamese"
 ];
 
@@ -150,14 +150,47 @@ export const datasetConfigs = {
       },
       {
         name: "destination_language",
-        label: "Target Language",
-        type: "select",
-        options: [], // Leave empty, Dashboard will populate this
+        label: "Target Languages",
+        type: "multiselect",
+        options: [], // Populated dynamically in Dashboard based on source_language
       },
       { name: "model", label: "Generation Model", type: "select",
         options: ["llama3.1:8b","gemma3:4b","llama3.2:3b","qwen2.5:7b"]
        },
       { name: "num_samples", label: "Number of Samples", type: "number" },
+      { name: "temperature", label: "Temperature", type: "number", step: "0.1" },
+      { name: "output_name", label: "Output Name", type: "text" },
+    ],
+  },
+
+  // =====================================================
+  // 7️⃣ Multilingual Fine-Tuning Dataset
+  // =====================================================
+  multilingual_ft: {
+    label: "Multilingual Fine-Tuning",
+    endpoint: "/generate/multilingual_ft",
+    fields: [
+      {
+        name: "training_pairs",
+        label: "Training Language Pairs",
+        type: "textarea",
+        placeholder: "English-Hindi, Hindi-English, English-Marathi, Marathi-English",
+      },
+      {
+        name: "zero_shot_pairs",
+        label: "Zero-Shot Evaluation Pairs (Optional)",
+        type: "textarea",
+        placeholder: "Hindi-Marathi, Marathi-Hindi",
+      },
+      {
+        name: "domains",
+        label: "Semantic Domains",
+        type: "tags",
+      },
+      { name: "model", label: "Generation Model", type: "select",
+        options: ["llama3.1:8b","gemma3:4b","qwen2.5:7b","gemma3:1b"]
+      },
+      { name: "num_samples_per_pair", label: "Samples Per Pair", type: "number" },
       { name: "temperature", label: "Temperature", type: "number", step: "0.1" },
       { name: "output_name", label: "Output Name", type: "text" },
     ],
