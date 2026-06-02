@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Callable, List, Union
 from uuid import UUID
 
@@ -7,6 +8,8 @@ import PyPDF2
 from domain.entities.dataset import DatasetEntity
 from domain.interfaces.dataset_repository import DatasetRepositoryInterface
 from app.services.storage_service import StorageService
+from infrastructure.db.database import SessionLocal
+from infrastructure.db.models import Dataset
 
 from generators.rag import generate_rag_dataset
 from generators.classification import generate_classification_dataset
